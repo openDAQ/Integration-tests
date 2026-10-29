@@ -6,16 +6,14 @@
             "hidden": true,
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
-            },
-            "binaryDir": "build/${presetName}"
+            }
         },
         {
             "name": "release",
             "hidden": true,
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
-            },
-            "binaryDir": "build/${presetName}"
+            }
         },
         {
             "name": "gcc",
@@ -108,319 +106,197 @@
             }
         },
         {
-            "name": "full",
+            "name": "integration",
             "hidden": true,
+            "description": "Short build folders and one download folder shared by all presets",
+            "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
-                "OPENDAQ_ENABLE_OPCUA": true,
-                "DAQMODULES_EMPTY_MODULE": true,
-                "DAQMODULES_OPENDAQ_CLIENT_MODULE": true,
-                "DAQMODULES_OPENDAQ_SERVER_MODULE": true,
-                "DAQMODULES_REF_DEVICE_MODULE": true,
-                "DAQMODULES_SIMULATOR_DEVICE_MODULE": true,
-                "DAQMODULES_REF_FB_MODULE": true,
-                "DAQMODULES_AUDIO_DEVICE_MODULE": true,
-                "DAQMODULES_BASIC_CSV_RECORDER_MODULE": true,
-                "DAQMODULES_LICENSING_MODULE": true,
-                "OPENDAQ_ENABLE_WEBSOCKET_STREAMING": true,
-                "OPENDAQ_ENABLE_WEBSOCKET_STREAMING_WITH_TLS": true,
-                "APP_ENABLE_WEBPAGE_EXAMPLES": true,
-                "OPENDAQ_DOCUMENTATION_TESTS": true,
-                "OPENDAQ_ENABLE_NATIVE_STREAMING": true,
-                "OPENDAQ_ENABLE_OPCUA_INTEGRATION_TESTS": true
+                "FETCHCONTENT_EXTERNALS_DIR": "${sourceDir}/build/_ext"
             }
         },
         {
-            "name": "simulator_package",
-            "hidden": false,
-            "cacheVariables": {
-                "OPENDAQ_ENABLE_TESTS": false,
-                "OPENDAQ_ALWAYS_FETCH_BOOST": false,
-                "OPENDAQ_GENERATE_PYTHON_BINDINGS": false,
-                "OPENDAQ_GENERATE_CSHARP_BINDINGS": false,
-                "DAQMODULES_REF_DEVICE_MODULE": true,
-                "DAQMODULES_SIMULATOR_DEVICE_MODULE": false,
-                "DAQMODULES_REF_FB_MODULE": true,
-                "DAQMODULES_AUDIO_DEVICE_MODULE": false,
-                "DAQMODULES_OPENDAQ_CLIENT_MODULE": false,
-                "DAQMODULES_OPENDAQ_SERVER_MODULE": true,
-                "DAQMODULES_BASIC_CSV_RECORDER_MODULE": true,
-                "OPENDAQ_ENABLE_OPCUA": true,
-                "OPENDAQ_ENABLE_WEBSOCKET_STREAMING": true,
-                "OPENDAQ_ENABLE_WEBSOCKET_STREAMING_WITH_TLS": true,
-                "OPENDAQ_ENABLE_NATIVE_STREAMING": true,
-                "DAQSIMULATOR_ENABLE_SIMULATOR_APP": true
-            }
-        },
-        {
-            "name": "stage",
-            "hidden": true,
-            "cacheVariables": {
-                "OPENDAQ_ENABLE_TESTS": false,
-                "OPENDAQ_ENABLE_TEST_UTILS": false,
-                "OPENDAQ_GENERATE_C_BINDINGS": false,
-                "OPENDAQ_GENERATE_PYTHON_BINDINGS": false,
-                "OPENDAQ_GENERATE_CSHARP_BINDINGS": false,
-                "OPENDAQ_GENERATE_DELPHI_BINDINGS": false,
-                "OPENDAQ_ENABLE_OPCUA": false,
-                "OPENDAQ_ENABLE_WEBSOCKET_STREAMING": false,
-                "OPENDAQ_ENABLE_NATIVE_STREAMING": false,
-                "DAQMODULES_OPENDAQ_CLIENT_MODULE": false,
-                "DAQMODULES_OPENDAQ_SERVER_MODULE": false,
-                "DAQMODULES_EMPTY_MODULE": false,
-                "DAQMODULES_AUDIO_DEVICE_MODULE": false,
-                "DAQMODULES_REF_DEVICE_MODULE": false,
-                "DAQMODULES_SIMULATOR_DEVICE_MODULE": false,
-                "DAQMODULES_REF_FB_MODULE": false,
-                "DAQMODULES_BASIC_CSV_RECORDER_MODULE": false,
-                "DAQMODULES_PARQUET_RECORDER_MODULE": false,
-                "DAQMODULES_LICENSING_MODULE": false,
-                "APP_ENABLE_WEBPAGE_EXAMPLES": false,
-                "DAQSIMULATOR_ENABLE_SIMULATOR_APP": false,
-                "OPENDAQ_BUILD_DOCUMENTATION": false
-            }
-        },
-        {
-            "name": "package",
-            "hidden": false,
-            "cacheVariables": {
-                "OPENDAQ_ENABLE_TESTS": false,
-                "OPENDAQ_GENERATE_PYTHON_BINDINGS": true,
-                "OPENDAQ_GENERATE_CSHARP_BINDINGS": true,
-                "OPENDAQ_GENERATE_C_BINDINGS": true,
-                "DAQMODULES_REF_DEVICE_MODULE": true,
-                "DAQMODULES_SIMULATOR_DEVICE_MODULE": true,
-                "DAQMODULES_REF_FB_MODULE": true,
-                "DAQMODULES_AUDIO_DEVICE_MODULE": true,
-                "DAQMODULES_OPENDAQ_CLIENT_MODULE": true,
-                "DAQMODULES_OPENDAQ_SERVER_MODULE": true,
-                "DAQMODULES_BASIC_CSV_RECORDER_MODULE": true,
-                "OPENDAQ_ENABLE_OPCUA": true,
-                "OPENDAQ_ENABLE_WEBSOCKET_STREAMING": true,
-                "OPENDAQ_ENABLE_WEBSOCKET_STREAMING_WITH_TLS": true,
-                "OPENDAQ_ENABLE_NATIVE_STREAMING": true
-            }
-        },
-        {
-            "name": "ci",
-            "hidden": false,
+            "name": "msvc22",
+            "displayName": "[MSVC 22] x64",
             "inherits": [
-                "full"
-            ],
-            "cacheVariables": {
-                "OPENDAQ_CI_RUNNER": true,
-                "OPENDAQ_DEBUG_WARNINGS_AS_ERRORS": true,
-                "OPENDAQ_ALWAYS_FETCH_BOOST": false,
-                "OPENDAQ_GENERATE_PYTHON_BINDINGS": true,
-                "OPENDAQ_GENERATE_CSHARP_BINDINGS": true,
-                "OPENDAQ_GENERATE_C_BINDINGS": true,
-                "APP_ENABLE_AUDIO_APP": true,
-                "APP_ENABLE_EXAMPLE_APPS": true,
-                "DAQSIMULATOR_ENABLE_SIMULATOR_APP": true,
-                "OPENDAQ_ENABLE_UNSTABLE_TEST_LABELS": true,
-                "OPENDAQ_SKIP_UNSTABLE_TESTS": true,
-                "OPENDAQ_ENABLE_OBJECT_POOLS": true,
-                "DAQMODULES_LT_LEGACY_MODULES": false
-            }
+                "integration",
+                "msvc-22",
+                "msvc-x64"
+            ]
         },
         {
-            "name": "unstable_tests_ci",
-            "hidden": false,
+            "name": "msvc26",
+            "displayName": "[MSVC 26] x64",
             "inherits": [
-                "ci"
-            ],
-            "cacheVariables": {
-                "OPENDAQ_ENABLE_UNSTABLE_TEST_LABELS": true,
-                "OPENDAQ_SKIP_UNSTABLE_TESTS": false
-            }
+                "integration",
+                "msvc-26",
+                "msvc-x64"
+            ]
         },
         {
-            "name": "full/release",
-            "hidden": true,
-            "displayName": "Full - Release",
+            "name": "gcc-debug",
+            "displayName": "[GCC] Debug",
             "inherits": [
+                "integration",
+                "debug",
+                "gcc",
+                "ninja"
+            ]
+        },
+        {
+            "name": "gcc-release",
+            "displayName": "[GCC] Release",
+            "inherits": [
+                "integration",
                 "release",
-                "full"
+                "gcc",
+                "ninja"
             ]
         },
         {
-            "name": "full/debug",
+            "name": "clang-debug",
+            "displayName": "[Clang] Debug",
+            "inherits": [
+                "integration",
+                "debug",
+                "clang",
+                "ninja"
+            ]
+        },
+        {
+            "name": "clang-release",
+            "displayName": "[Clang] Release",
+            "inherits": [
+                "integration",
+                "release",
+                "clang",
+                "ninja"
+            ]
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "test-apps",
             "hidden": true,
-            "displayName": "Full - Debug",
-            "inherits": [
-                "debug",
-                "full"
+            "description": "Builds the integration test apps and everything they link",
+            "targets": [
+                "test_ref_modules",
+                "test_device_modules",
+                "test_device_modules_streaming"
             ]
         },
         {
-            "name": "x86/msvc-17/full",
-            "displayName": "[MSVC 17] Full - x86",
-            "inherits": [
-                "full/release",
-                "msvc-17",
-                "msvc-x86"
-            ]
+            "name": "msvc22-release",
+            "displayName": "[MSVC 22] x64 - Release",
+            "configurePreset": "msvc22",
+            "configuration": "Release",
+            "inherits": "test-apps"
         },
         {
-            "name": "x64/msvc-17/full",
-            "displayName": "[MSVC 17] Full - x64",
-            "inherits": [
-                "full/release",
-                "msvc-17",
-                "msvc-x64"
-            ]
+            "name": "msvc22-debug",
+            "displayName": "[MSVC 22] x64 - Debug",
+            "configurePreset": "msvc22",
+            "configuration": "Debug",
+            "inherits": "test-apps"
         },
         {
-            "name": "x86/msvc-22/full",
-            "displayName": "[MSVC 22] Full - x86",
-            "inherits": [
-                "full/release",
-                "msvc-22",
-                "msvc-x86"
-            ]
+            "name": "msvc26-release",
+            "displayName": "[MSVC 26] x64 - Release",
+            "configurePreset": "msvc26",
+            "configuration": "Release",
+            "inherits": "test-apps"
         },
         {
-            "name": "x64/msvc-22/full",
-            "displayName": "[MSVC 22] Full - x64",
-            "inherits": [
-                "full/release",
-                "msvc-22",
-                "msvc-x64"
-            ]
+            "name": "msvc26-debug",
+            "displayName": "[MSVC 26] x64 - Debug",
+            "configurePreset": "msvc26",
+            "configuration": "Debug",
+            "inherits": "test-apps"
         },
         {
-            "name": "x86/msvc-26/full",
-            "displayName": "[MSVC 26] Full - x86",
-            "inherits": [
-                "full/release",
-                "msvc-26",
-                "msvc-x86"
-            ]
+            "name": "gcc-debug",
+            "displayName": "[GCC] Debug",
+            "configurePreset": "gcc-debug",
+            "inherits": "test-apps"
         },
         {
-            "name": "x64/msvc-26/full",
-            "displayName": "[MSVC 26] Full - x64",
-            "inherits": [
-                "full/release",
-                "msvc-26",
-                "msvc-x64"
-            ]
+            "name": "gcc-release",
+            "displayName": "[GCC] Release",
+            "configurePreset": "gcc-release",
+            "inherits": "test-apps"
         },
         {
-            "name": "x64/gcc/full/debug",
-            "displayName": "[GCC] Full - Debug",
-            "inherits": [
-                "full/debug",
-                "gcc",
-                "ninja"
-            ]
+            "name": "clang-debug",
+            "displayName": "[Clang] Debug",
+            "configurePreset": "clang-debug",
+            "inherits": "test-apps"
         },
         {
-            "name": "x64/gcc/full/release",
-            "displayName": "[GCC] Full - Release",
-            "inherits": [
-                "full/release",
-                "gcc",
-                "ninja"
-            ]
-        },
-        {
-            "name": "x64/clang/full/debug",
-            "displayName": "[Clang] Full - Debug",
-            "inherits": [
-                "full/debug",
-                "clang",
-                "ninja"
-            ]
-        },
-        {
-            "name": "x64/clang/full/release",
-            "displayName": "[Clang] Full - Release",
-            "inherits": [
-                "full/release",
-                "clang",
-                "ninja"
-            ]
-        },
-        {
-            "name": "x64/intel-llvm/full/debug",
-            "displayName": "[IntelLLVM] Full - Debug",
-            "inherits": [
-                "full/debug",
-                "intel-llvm",
-                "ninja"
-            ]
-        },
-        {
-            "name": "x64/intel-llvm/full/release",
-            "displayName": "[IntelLLVM] Full - Release",
-            "inherits": [
-                "full/release",
-                "intel-llvm",
-                "ninja"
-            ]
-        },
-        {
-            "name": "x64/msvc-26-ninja/full/measure",
-            "displayName": "[MSVC 26 + Ninja] Full - build time measurement",
-            "description": "Ninja with MSVC, bindings on, compiler cache off for reproducible build times. Pass -DOPENDAQ_ENABLE_BUILD_ACCELERATION=OFF for the baseline.",
-            "inherits": [
-                "debug",
-                "full"
-            ],
-            "generator": "Ninja",
-            "cacheVariables": {
-                "CMAKE_C_COMPILER": "cl",
-                "CMAKE_CXX_COMPILER": "cl",
-                "OPENDAQ_GENERATE_PYTHON_BINDINGS": true,
-                "OPENDAQ_GENERATE_C_BINDINGS": true,
-                "OPENDAQ_ENABLE_PYTHON_BINDINGS_TESTS": false,
-                "OPENDAQ_USE_CCACHE": false
-            }
+            "name": "clang-release",
+            "displayName": "[Clang] Release",
+            "configurePreset": "clang-release",
+            "inherits": "test-apps"
         }
     ],
     "testPresets": [
         {
             "name": "run_tests",
-            "description": "Run all tests excluding unstable ones",
-            "configurePreset": "ci",
+            "hidden": true,
+            "description": "Run all integration tests; RESOURCE_LOCK keeps port and mDNS users apart, so -j is safe",
             "output": {
                 "outputOnFailure": true
             }
         },
         {
-            "name": "run_tests_nightly",
-            "description": "Run all tests excluding unstable ones, streaming test output live",
-            "inherits": [
-                "run_tests"
-            ],
-            "output": {
-                "verbosity": "verbose"
-            }
+            "name": "msvc22-release",
+            "displayName": "[MSVC 22] x64 - Release",
+            "configurePreset": "msvc22",
+            "configuration": "Release",
+            "inherits": "run_tests"
         },
         {
-            "name": "run_tests_parallel",
-            "description": "Run all tests excluding unstable ones, one job per core (CMake 3.29+, serial before); RESOURCE_LOCK keeps port and mDNS users apart",
-            "inherits": "run_tests",
-            "environment": {
-                "CTEST_PARALLEL_LEVEL": ""
-            }
+            "name": "msvc22-debug",
+            "displayName": "[MSVC 22] x64 - Debug",
+            "configurePreset": "msvc22",
+            "configuration": "Debug",
+            "inherits": "run_tests"
         },
         {
-            "name": "run_unstable_test_repeatedly",
-            "description": "Run only unstable tests multiple times",
-            "configurePreset": "unstable_tests_ci",
-            "output": {
-                "outputOnFailure": true
-            },
-            "environment": {
-                "GTEST_FILTER": "*.UNSTABLE_SKIPPED_*",
-                "GTEST_REPEAT": "30"
-            },
-            "filter": {
-                "exclude": {
-                    "name": "test_py_opendaq"
-                }
-            }
+            "name": "msvc26-release",
+            "displayName": "[MSVC 26] x64 - Release",
+            "configurePreset": "msvc26",
+            "configuration": "Release",
+            "inherits": "run_tests"
+        },
+        {
+            "name": "msvc26-debug",
+            "displayName": "[MSVC 26] x64 - Debug",
+            "configurePreset": "msvc26",
+            "configuration": "Debug",
+            "inherits": "run_tests"
+        },
+        {
+            "name": "gcc-debug",
+            "displayName": "[GCC] Debug",
+            "configurePreset": "gcc-debug",
+            "inherits": "run_tests"
+        },
+        {
+            "name": "gcc-release",
+            "displayName": "[GCC] Release",
+            "configurePreset": "gcc-release",
+            "inherits": "run_tests"
+        },
+        {
+            "name": "clang-debug",
+            "displayName": "[Clang] Debug",
+            "configurePreset": "clang-debug",
+            "inherits": "run_tests"
+        },
+        {
+            "name": "clang-release",
+            "displayName": "[Clang] Release",
+            "configurePreset": "clang-release",
+            "inherits": "run_tests"
         }
     ]
 }

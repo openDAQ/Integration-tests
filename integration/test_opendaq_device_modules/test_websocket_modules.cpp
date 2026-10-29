@@ -97,7 +97,7 @@ enum class Channel
 static std::vector<Channel> GetChannelSuite()
 {
     std::vector<Channel> suite{Channel::Plain};
-#ifdef OPENDAQ_ENABLE_WEBSOCKET_STREAMING_WITH_TLS
+#ifdef DAQMODULES_LT_STREAMING_ENABLE_TLS
     suite.push_back(Channel::Tls);
 #endif
     return suite;
@@ -139,7 +139,7 @@ public:
 
     PropertyObjectPtr serverConfig([[maybe_unused]] const InstancePtr& server) const
     {
-#ifdef OPENDAQ_ENABLE_WEBSOCKET_STREAMING_WITH_TLS
+#ifdef DAQMODULES_LT_STREAMING_ENABLE_TLS
         if (secure())
             return test_helpers::lt_tls::secureServerConfig(server);
 #endif
@@ -157,7 +157,7 @@ public:
 
     PropertyObjectPtr deviceConfig([[maybe_unused]] const InstancePtr& client) const
     {
-#ifdef OPENDAQ_ENABLE_WEBSOCKET_STREAMING_WITH_TLS
+#ifdef DAQMODULES_LT_STREAMING_ENABLE_TLS
         if (secure())
             return test_helpers::lt_tls::secureDeviceConfig(client);
 #endif
@@ -461,7 +461,7 @@ TEST_P(WebsocketModulesChannelTest, TestDiscoveryReachability)
     ASSERT_TRUE(false) << "Device not found";
 }
 
-#ifdef OPENDAQ_ENABLE_WEBSOCKET_STREAMING_WITH_TLS
+#ifdef DAQMODULES_LT_STREAMING_ENABLE_TLS
 // A server with the TLS channel enabled keeps serving the plaintext one and advertises both services
 // (_streaming-lt._tcp and _streaming-lts._tcp). Both capabilities are merged into a single discovered device
 // info, because the root device info provides a manufacturer and a serial number to group them by

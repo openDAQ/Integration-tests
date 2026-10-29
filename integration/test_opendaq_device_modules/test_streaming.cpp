@@ -7,18 +7,6 @@
 #include "test_helpers/device_modules.h"
 #include "test_helpers/lt_tls.h"
 
-#ifdef DAQMODULES_LT_LEGACY_MODULES
-    #define ENABLE_COMMON_LT_STREAMING_TESTS
-#else
-    #define ENABLE_ALTERNATIVE_LT_STREAMING_TESTS
-#endif
-#define ENABLE_COMMON_NATIVE_STREAMING_TESTS
-
-#ifdef DAQMODULES_LT_LEGACY_MODULES
-    #define ENABLE_COMMON_LT_STREAMING_TESTS
-#else
-    #define ENABLE_ALTERNATIVE_LT_STREAMING_TESTS
-#endif
 #define ENABLE_COMMON_NATIVE_STREAMING_TESTS
 
 using namespace daq;
@@ -164,23 +152,6 @@ public:
         return suite;
     }
 
-    static std::vector<std::tuple<std::string, std::string>> GetLtTestSuite()
-    {
-        std::vector<std::tuple<std::string, std::string>> suite;
-#ifndef ENABLE_COMMON_LT_STREAMING_TESTS
-        return suite;
-#endif
-        suite.push_back(std::make_tuple("OpenDAQLTStreaming", "daq.lt://127.0.0.1/"));
-        suite.push_back(std::make_tuple("OpenDAQLTStreaming", "daq.lt://[::1]/"));
-#if defined(OPENDAQ_ENABLE_NATIVE_STREAMING)
-        suite.push_back(std::make_tuple("OpenDAQLTStreaming", "daq.nd://127.0.0.1/"));
-        suite.push_back(std::make_tuple("OpenDAQLTStreaming", "daq.nd://[::1]/"));
-#endif
-        suite.push_back(std::make_tuple("OpenDAQLTStreaming", "daq.opcua://127.0.0.1/"));
-        suite.push_back(std::make_tuple("OpenDAQLTStreaming", "daq.opcua://[::1]/"));
-        return suite;
-    }
-
 protected:
     virtual InstancePtr CreateServerInstance()
     {
@@ -222,7 +193,7 @@ protected:
         PropertyObjectPtr general = config.getPropertyValue("General");
         general.setPropertyValue("PrioritizedStreamingProtocols", List<IString>(std::get<0>(GetParam())));
 
-#ifdef OPENDAQ_ENABLE_WEBSOCKET_STREAMING_WITH_TLS
+#ifdef DAQMODULES_LT_STREAMING_ENABLE_TLS
         if (usingSecureLTStreaming)
             test_helpers::lt_tls::applySecureClientConfig(config);
 #endif
@@ -641,14 +612,6 @@ INSTANTIATE_TEST_SUITE_P(
     );
 #endif
 
-#if defined(OPENDAQ_ENABLE_WEBSOCKET_STREAMING)
-INSTANTIATE_TEST_SUITE_P(
-    StreamingTestGroup_LT,
-    StreamingTest,
-    testing::ValuesIn(StreamingTest::GetLtTestSuite())
-    );
-#endif
-
 #if defined(OPENDAQ_ENABLE_NATIVE_STREAMING)
 class StreamingAsyncSignalTest : public StreamingTest
 {
@@ -927,7 +890,6 @@ TEST_F(NativeDeviceStreamingTest, ChangedDataDescriptorBeforeSubscribeNativeDevi
 
 #endif
 
-#if defined(OPENDAQ_ENABLE_WEBSOCKET_STREAMING) && defined(ENABLE_ALTERNATIVE_LT_STREAMING_TESTS)
 class StreamingTestForModernLt : public StreamingTest
 {
 public:
@@ -943,7 +905,7 @@ public:
         suite.push_back(std::make_tuple("OpenDAQLTStreaming", "daq.opcua://127.0.0.1/"));
         suite.push_back(std::make_tuple("OpenDAQLTStreaming", "daq.opcua://[::1]/"));
 
-#ifdef OPENDAQ_ENABLE_WEBSOCKET_STREAMING_WITH_TLS
+#ifdef DAQMODULES_LT_STREAMING_ENABLE_TLS
         suite.push_back(std::make_tuple("OpenDAQLTStreamingSecure", "daq.lts://127.0.0.1/"));
         suite.push_back(std::make_tuple("OpenDAQLTStreamingSecure", "daq.lts://[::1]/"));
 #if defined(OPENDAQ_ENABLE_NATIVE_STREAMING)
@@ -1113,7 +1075,7 @@ protected:
 
     PropertyObjectPtr ltServerConfig([[maybe_unused]] const InstancePtr& instance)
     {
-#ifdef OPENDAQ_ENABLE_WEBSOCKET_STREAMING_WITH_TLS
+#ifdef DAQMODULES_LT_STREAMING_ENABLE_TLS
         if (usingSecureLTStreaming)
             return test_helpers::lt_tls::secureServerConfig(instance);
 #endif
@@ -1737,6 +1699,5 @@ INSTANTIATE_TEST_SUITE_P(
     StreamingReconnectionTestForModernLt,
     testing::ValuesIn(StreamingTestForModernLt::GetLtTestSuite())
     );
-#endif
 }
 // namespace test_streaming

@@ -17,9 +17,8 @@
 #pragma once
 
 // Helpers for connecting the LT streaming modules over the secure (TLS) channel
-// The channel is absent from a build with OPENDAQ_ENABLE_WEBSOCKET_STREAMING_WITH_TLS off, and from
-// the legacy LT streaming modules, which have no TLS support at all
-#ifdef OPENDAQ_ENABLE_WEBSOCKET_STREAMING_WITH_TLS
+// The channel is absent when the LT streaming modules are built with DAQMODULES_LT_STREAMING_ENABLE_TLS off
+#ifdef DAQMODULES_LT_STREAMING_ENABLE_TLS
 
 #include <opendaq/opendaq.h>
 

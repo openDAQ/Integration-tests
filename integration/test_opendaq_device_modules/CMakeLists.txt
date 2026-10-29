@@ -58,6 +58,10 @@ function(add_device_modules_test_app APP)
             daq::native_stream_srv_module
     )
 
+    # Provides DAQMODULES_LT_STREAMING_ENABLE_TLS; the LT modules link it privately, so it does not reach
+    # the tests through them
+    target_link_libraries(${APP} PRIVATE daq::websocket_streaming)
+
     if (MSVC)
         target_compile_options(${APP} PRIVATE /bigobj)
     endif()
@@ -82,21 +86,20 @@ add_device_modules_test_app(${STREAMING_TEST_APP} ${STREAMING_TEST_SOURCES})
 
 # The LT streaming tests over the secure channel need TLS fixtures (CA, server and client
 # certificates/keys). Reuse the pre-generated ones from the LT streaming modules repository instead of
-# keeping a second copy here. The legacy LT modules have neither TLS support nor those fixtures, and
-# neither has a modern build with the secure channel switched off.
-if (NOT DAQMODULES_LT_LEGACY_MODULES AND OPENDAQ_ENABLE_WEBSOCKET_STREAMING_WITH_TLS AND DEFINED LT_MODULES_SOURCE_DIR)
+# keeping a second copy here. Only needed when the LT modules are built with the secure channel.
+if (DAQMODULES_LT_STREAMING_ENABLE_TLS)
     set(LT_TLS_SECRETS_DIR "${LT_MODULES_SOURCE_DIR}/tests/integration/secrets")
-    if (EXISTS "${LT_TLS_SECRETS_DIR}")
-        foreach(APP ${TEST_APP} ${STREAMING_TEST_APP})
-            add_custom_command(TARGET ${APP} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_directory
-                        ${LT_TLS_SECRETS_DIR}
-                        $<TARGET_FILE_DIR:${APP}>/secrets)
-        endforeach()
-    else()
-        message(WARNING "TLS fixtures not found in ${LT_TLS_SECRETS_DIR}. "
-                        "The LT streaming tests over the secure channel will fail to load their secrets.")
+    if (NOT EXISTS "${LT_TLS_SECRETS_DIR}")
+        message(FATAL_ERROR "TLS fixtures not found in ${LT_TLS_SECRETS_DIR}. "
+                            "The LT streaming tests over the secure channel need them to load their secrets.")
     endif()
+
+    foreach(APP ${TEST_APP} ${STREAMING_TEST_APP})
+        add_custom_command(TARGET ${APP} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    ${LT_TLS_SECRETS_DIR}
+                    $<TARGET_FILE_DIR:${APP}>/secrets)
+    endforeach()
 endif()
 
 add_test(NAME ${TEST_APP}
