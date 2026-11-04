@@ -171,6 +171,57 @@
                 "clang",
                 "ninja"
             ]
+        },
+        {
+            "name": "ci",
+            "displayName": "[CI] Default generator - Release",
+            "description": "Settings of the CI runs, with the host's default generator and compiler; the ci-<OS> presets add the toolchain of each CI runner",
+            "inherits": [
+                "integration",
+                "release"
+            ],
+            "cacheVariables": {
+                "OPENDAQ_CI_RUNNER": true,
+                "OPENDAQ_ENABLE_UNSTABLE_TEST_LABELS": true,
+                "OPENDAQ_SKIP_UNSTABLE_TESTS": true
+            }
+        },
+        {
+            "name": "ci-windows",
+            "displayName": "[CI] Windows: MSVC 22 x64 - Release",
+            "inherits": [
+                "ci",
+                "msvc-22",
+                "msvc-x64"
+            ]
+        },
+        {
+            "name": "ci-linux",
+            "displayName": "[CI] Linux: GCC - Release",
+            "inherits": [
+                "ci",
+                "gcc",
+                "ninja"
+            ],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "ci-macos",
+            "displayName": "[CI] macOS: AppleClang - Release",
+            "inherits": [
+                "ci",
+                "clang",
+                "ninja"
+            ],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
         }
     ],
     "buildPresets": [
@@ -235,6 +286,34 @@
             "displayName": "[Clang] Release",
             "configurePreset": "clang-release",
             "inherits": "test-apps"
+        },
+        {
+            "name": "ci",
+            "displayName": "[CI] Default generator - Release",
+            "configurePreset": "ci",
+            "configuration": "Release",
+            "inherits": "test-apps"
+        },
+        {
+            "name": "ci-windows",
+            "displayName": "[CI] Windows: MSVC 22 x64 - Release",
+            "configurePreset": "ci-windows",
+            "configuration": "Release",
+            "inherits": "test-apps"
+        },
+        {
+            "name": "ci-linux",
+            "displayName": "[CI] Linux: GCC - Release",
+            "configurePreset": "ci-linux",
+            "configuration": "Release",
+            "inherits": "test-apps"
+        },
+        {
+            "name": "ci-macos",
+            "displayName": "[CI] macOS: AppleClang - Release",
+            "configurePreset": "ci-macos",
+            "configuration": "Release",
+            "inherits": "test-apps"
         }
     ],
     "testPresets": [
@@ -296,6 +375,34 @@
             "name": "clang-release",
             "displayName": "[Clang] Release",
             "configurePreset": "clang-release",
+            "inherits": "run_tests"
+        },
+        {
+            "name": "ci",
+            "displayName": "[CI] Default generator - Release",
+            "configurePreset": "ci",
+            "configuration": "Release",
+            "inherits": "run_tests"
+        },
+        {
+            "name": "ci-windows",
+            "displayName": "[CI] Windows: MSVC 22 x64 - Release",
+            "configurePreset": "ci-windows",
+            "configuration": "Release",
+            "inherits": "run_tests"
+        },
+        {
+            "name": "ci-linux",
+            "displayName": "[CI] Linux: GCC - Release",
+            "configurePreset": "ci-linux",
+            "configuration": "Release",
+            "inherits": "run_tests"
+        },
+        {
+            "name": "ci-macos",
+            "displayName": "[CI] macOS: AppleClang - Release",
+            "configurePreset": "ci-macos",
+            "configuration": "Release",
             "inherits": "run_tests"
         }
     ]
