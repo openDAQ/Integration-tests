@@ -1,0 +1,53 @@
+name: Integration tests
+
+# A manual run is named after the refs it tests, so the run list shows what each run tested
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+  && format('openDAQ {0} · LT {1} · OPC UA {2}', inputs.opendaq-ref, inputs.lt-modules-ref, inputs.opcua-modules-ref)
+  || format('{0} · openDAQ, LT and OPC UA from the ref files', github.event.pull_request.title) }}
+
+on:
+  pull_request:
+  # The defaults are the refs in the ref files, which local builds use; keep them equal when a ref file changes
+  workflow_dispatch:
+    inputs:
+      opendaq-ref:
+        description: openDAQ branch, tag or full commit SHA (e.g. main, v3.40.3, pull/1363/head)
+        type: string
+        required: true
+        default: Integration_test_removal
+      lt-modules-ref:
+        description: LTStreamingModulesModern branch, tag or full commit SHA
+        type: string
+        required: true
+        default: main
+      opcua-modules-ref:
+        description: OpcUaModules branch, tag or full commit SHA
+        type: string
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Resolve commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      opendaq-sha: ${{ steps.resolve.outputs.opendaq-sha }}
+      lt-modules-sha: ${{ steps.resolve.outputs.lt-modules-sha }}
+      opcua-modules-sha: ${{ steps.resolve.outputs.opcua-modules-sha }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # Pull request runs have no inputs and take the refs from the ref files
+      - name: Resolve the refs to commits
+        id: resolve
+        env:
+          OPENDAQ_REF: ${{ inputs.opendaq-ref }}
+          LT_MODULES_REF: ${{ inputs.lt-modules-ref }}
+          OPCUA_MODULES_REF: ${{ inputs.opcua-modules-ref }}
+          INTEGRATION_TESTS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 .github/scripts/resolve_refs.py
