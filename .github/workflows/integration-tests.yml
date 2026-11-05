@@ -3,8 +3,8 @@ name: Integration tests
 # A manual run is named after the refs it tests, so the run list shows what each run tested
 run-name: >-
   ${{ github.event_name == 'workflow_dispatch'
-  && format('openDAQ {0} · LT {1} · OPC UA {2}', inputs.opendaq-ref, inputs.lt-modules-ref, inputs.opcua-modules-ref)
-  || format('{0} · openDAQ, LT and OPC UA from the ref files', github.event.pull_request.title) }}
+  && format('Integration tests - core: {0} - LT: {1} - OPC UA: {2}', inputs.opendaq-ref, inputs.lt-modules-ref, inputs.opcua-modules-ref)
+  || format('Integration tests - PR #{0} {1} - core, LT and OPC UA from the ref files', github.event.pull_request.number, github.event.pull_request.title) }}
 
 on:
   pull_request:
@@ -30,6 +30,11 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels the run of its previous commit; manual runs never cancel each other
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   resolve:
     name: Resolve commits
@@ -40,7 +45,7 @@ jobs:
       lt-modules-sha: ${{ steps.resolve.outputs.lt-modules-sha }}
       opcua-modules-sha: ${{ steps.resolve.outputs.opcua-modules-sha }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # Pull request runs have no inputs and take the refs from the ref files
       - name: Resolve the refs to commits
@@ -51,3 +56,91 @@ jobs:
           OPCUA_MODULES_REF: ${{ inputs.opcua-modules-ref }}
           INTEGRATION_TESTS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python3 .github/scripts/resolve_refs.py
+
+  # Builds the resolved commits from source and runs the integration tests; one matrix entry per platform
+  test:
+    name: ${{ matrix.name }}
+    needs: resolve
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            runner: windows-2022
+            preset: ci-windows
+    defaults:
+      run:
+        shell: bash
+    env:
+      PRESET: ${{ matrix.preset }}
+      OPENDAQ_SHA: ${{ needs.resolve.outputs.opendaq-sha }}
+      LT_MODULES_SHA: ${{ needs.resolve.outputs.lt-modules-sha }}
+      OPCUA_MODULES_SHA: ${{ needs.resolve.outputs.opcua-modules-sha }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out openDAQ
+        uses: actions/checkout@v7
+        with:
+          repository: openDAQ/openDAQ
+          ref: ${{ env.OPENDAQ_SHA }}
+          path: build/_src/openDAQ
+          persist-credentials: false
+
+      - name: Check out LTStreamingModulesModern
+        uses: actions/checkout@v7
+        with:
+          repository: openDAQ/LTStreamingModulesModern
+          ref: ${{ env.LT_MODULES_SHA }}
+          path: build/_src/LTStreamingModulesModern
+          persist-credentials: false
+
+      - name: Check out OpcUaModules
+        uses: actions/checkout@v7
+        with:
+          repository: openDAQ/OpcUaModules
+          ref: ${{ env.OPCUA_MODULES_SHA }}
+          path: build/_src/OpcUaModules
+          persist-credentials: false
+
+      # The checked out sources replace the FetchContent downloads; CMake gets the paths with forward slashes
+      - name: Configure
+        run: |
+          src="${GITHUB_WORKSPACE//\\//}/build/_src"
+          cmake --preset "$PRESET" \
+            -DFETCHCONTENT_SOURCE_DIR_OPENDAQ="$src/openDAQ" -DOPENDAQ_REF="$OPENDAQ_SHA" \
+            -DFETCHCONTENT_SOURCE_DIR_LTSTREAMINGMODULESMODERN="$src/LTStreamingModulesModern" -DLT_MODULES_REF="$LT_MODULES_SHA" \
+            -DFETCHCONTENT_SOURCE_DIR_OPCUAMODULES="$src/OpcUaModules" -DOPCUA_MODULES_REF="$OPCUA_MODULES_SHA"
+
+      - name: Build
+        run: cmake --build --preset "$PRESET" --parallel
+
+      # The JUnit file keeps the end of a failed test app's output, which names the test running when it crashed
+      - name: Test
+        run: |
+          results="${GITHUB_WORKSPACE//\\//}/build/test-results"
+          mkdir -p "$results/gtest"
+          GTEST_OUTPUT="xml:$results/gtest/" ctest --preset "$PRESET" \
+            --output-junit "$results/ctest-junit.xml" --test-output-truncation head
+
+      - name: Report the test results
+        if: ${{ !cancelled() }}
+        env:
+          PLATFORM: ${{ matrix.name }}
+          PYTHONUTF8: 1
+        run: >
+          python .github/scripts/annotate_test_results.py --platform "$PLATFORM"
+          --gtest-xml-dir build/test-results/gtest --ctest-junit build/test-results/ctest-junit.xml
+
+      - name: Upload the test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.preset }}
+          path: |
+            build/test-results
+            build/${{ matrix.preset }}/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
+          retention-days: 14
