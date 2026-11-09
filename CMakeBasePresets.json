@@ -197,12 +197,17 @@
         },
         {
             "name": "ci-linux",
-            "displayName": "[CI] Linux: GCC - Release",
+            "displayName": "[CI] Linux: GCC 15 - Release",
+            "description": "gcc 15, the compiler of the CI's Ubuntu 26.04 runners, named with its version so that an image update cannot change it",
             "inherits": [
                 "ci",
                 "gcc",
                 "ninja"
             ],
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc-15",
+                "CMAKE_CXX_COMPILER": "g++-15"
+            },
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
@@ -303,7 +308,7 @@
         },
         {
             "name": "ci-linux",
-            "displayName": "[CI] Linux: GCC - Release",
+            "displayName": "[CI] Linux: GCC 15 - Release",
             "configurePreset": "ci-linux",
             "configuration": "Release",
             "inherits": "test-apps"
@@ -393,7 +398,7 @@
         },
         {
             "name": "ci-linux",
-            "displayName": "[CI] Linux: GCC - Release",
+            "displayName": "[CI] Linux: GCC 15 - Release",
             "configurePreset": "ci-linux",
             "configuration": "Release",
             "inherits": "run_tests"

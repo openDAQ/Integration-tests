@@ -57,7 +57,8 @@ jobs:
           INTEGRATION_TESTS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python3 .github/scripts/resolve_refs.py
 
-  # Builds the resolved commits from source and runs the integration tests; one matrix entry per platform
+  # Builds the resolved commits from source and runs the integration tests; one matrix entry per platform.
+  # An entry's id names its artifacts; several entries can share a preset (e.g. both Linux architectures use ci-linux)
   test:
     name: ${{ matrix.name }}
     needs: resolve
@@ -68,8 +69,22 @@ jobs:
       matrix:
         include:
           - name: Windows x64
+            id: windows-x64
             runner: windows-2022
             preset: ci-windows
+          - name: Linux x64
+            id: linux-x64
+            runner: ubuntu-26.04
+            preset: ci-linux
+          - name: Linux arm64
+            id: linux-arm64
+            runner: ubuntu-26.04-arm
+            preset: ci-linux
+          - name: macOS arm64
+            id: macos-arm64
+            runner: macos-26
+            preset: ci-macos
+            xcode: /Applications/Xcode_26.6.app/Contents/Developer
     defaults:
       run:
         shell: bash
@@ -78,6 +93,8 @@ jobs:
       OPENDAQ_SHA: ${{ needs.resolve.outputs.opendaq-sha }}
       LT_MODULES_SHA: ${{ needs.resolve.outputs.lt-modules-sha }}
       OPCUA_MODULES_SHA: ${{ needs.resolve.outputs.opcua-modules-sha }}
+      # Picks the Xcode, and with it the Apple clang, on macOS; nothing reads it elsewhere
+      DEVELOPER_DIR: ${{ matrix.xcode }}
     steps:
       - uses: actions/checkout@v7
 
@@ -105,6 +122,18 @@ jobs:
           path: build/_src/OpcUaModules
           persist-credentials: false
 
+      # Core generates code with Mono on Linux and macOS; the Linux packages are the ones core's CI installs on Ubuntu 26.04
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-15 ninja-build mono-runtime mono-libraries lld libssl-dev \
+            libx11-dev libxi-dev libxcursor-dev libxrandr-dev libgl-dev libudev-dev libfreetype-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install mono
+
       # The checked out sources replace the FetchContent downloads; CMake gets the paths with forward slashes
       - name: Configure
         run: |
@@ -125,20 +154,22 @@ jobs:
           GTEST_OUTPUT="xml:$results/gtest/" ctest --preset "$PRESET" \
             --output-junit "$results/ctest-junit.xml" --test-output-truncation head
 
+      # Python 3 is python on the Windows runners and python3 on the Linux and macOS runners
       - name: Report the test results
         if: ${{ !cancelled() }}
         env:
           PLATFORM: ${{ matrix.name }}
+          PYTHON: ${{ runner.os == 'Windows' && 'python' || 'python3' }}
           PYTHONUTF8: 1
         run: >
-          python .github/scripts/annotate_test_results.py --platform "$PLATFORM"
+          "$PYTHON" .github/scripts/annotate_test_results.py --platform "$PLATFORM"
           --gtest-xml-dir build/test-results/gtest --ctest-junit build/test-results/ctest-junit.xml
 
       - name: Upload the test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: test-results-${{ matrix.preset }}
+          name: test-results-${{ matrix.id }}
           path: |
             build/test-results
             build/${{ matrix.preset }}/Testing/Temporary/LastTest.log
