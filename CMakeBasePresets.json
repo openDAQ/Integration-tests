@@ -1,5 +1,5 @@
 {
-    "version": 4,
+    "version": 6,
     "configurePresets": [
         {
             "name": "debug",
@@ -175,7 +175,7 @@
         {
             "name": "ci",
             "displayName": "[CI] Default generator - Release",
-            "description": "Settings of the CI runs, with the host's default generator and compiler; the ci-<OS> presets add the toolchain of each CI runner",
+            "description": "Settings of the CI runs, with the host's default generator and compiler; in the CI, openDAQ-CI's generated presets add the toolchain of each job, and locally the ci-<OS> presets add a similar one",
             "inherits": [
                 "integration",
                 "release"
@@ -198,7 +198,7 @@
         {
             "name": "ci-linux",
             "displayName": "[CI] Linux: GCC 15 - Release",
-            "description": "gcc 15, the compiler of the CI's Ubuntu 26.04 runners, named with its version so that an image update cannot change it",
+            "description": "gcc 15, the compiler of the CI's Ubuntu 26.04 jobs, named with its version so that an image update cannot change it",
             "inherits": [
                 "ci",
                 "gcc",
@@ -328,6 +328,16 @@
             "description": "Run all integration tests; RESOURCE_LOCK keeps port and mDNS users apart, so -j is safe",
             "output": {
                 "outputOnFailure": true
+            }
+        },
+        {
+            "name": "ci-tests",
+            "hidden": true,
+            "description": "Test settings of the CI runs, inherited by openDAQ-CI's generated test presets: the ctest JUnit file, which keeps the end of a failed test app's output, goes to a subfolder of the folder with the gtest XML files",
+            "inherits": "run_tests",
+            "output": {
+                "outputJUnitFile": "${sourceDir}/build/test-results/ctest/ctest-junit.xml",
+                "testOutputTruncation": "head"
             }
         },
         {

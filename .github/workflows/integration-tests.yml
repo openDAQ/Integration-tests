@@ -57,121 +57,99 @@ jobs:
           INTEGRATION_TESTS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python3 .github/scripts/resolve_refs.py
 
-  # Builds the resolved commits from source and runs the integration tests; one matrix entry per platform.
-  # An entry's id names its artifacts; several entries can share a preset (e.g. both Linux architectures use ci-linux)
-  test:
-    name: ${{ matrix.name }}
+  # Builds the resolved commits and runs the integration tests with openDAQ-CI's reusable workflow, which core's CI also
+  # uses: one job per catalog entry, in the environments of core's CI (Linux in ubuntu:26.04 containers)
+  build-and-test:
+    name: Build and test
     needs: resolve
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    uses: openDAQ/openDAQ-CI/.github/workflows/reusable.yml@v4
+    with:
+      include-jobs: >
+        [
+          "windows-2022-x86_64-msvs-v143-release",
+          "ubuntu-26.04-x86_64-ninja-gcc-15-release",
+          "ubuntu-26.04-armv8-ninja-gcc-15-release",
+          "macos-26-armv8-ninja-appleclang-21-release"
+        ]
+      # The run command fetches the three sources at the resolved commits into build/_src before Configure.
+      # The packages are the ones core's CI installs; the catalog entries add Mono and the compilers
+      packages: >
+        [
+          {
+            "run": "python3 .github/scripts/fetch_sources.py --opendaq ${{ needs.resolve.outputs.opendaq-sha }} --lt-modules ${{ needs.resolve.outputs.lt-modules-sha }} --opcua-modules ${{ needs.resolve.outputs.opcua-modules-sha }}"
+          },
+          {
+            "match-jobs": ["ubuntu-*"],
+            "apt-install": ["lld", "libssl-dev", "libx11-dev", "libxi-dev", "libxcursor-dev", "libxrandr-dev", "libgl-dev", "libudev-dev", "libfreetype-dev"]
+          },
+          {
+            "match-jobs": ["windows-*"],
+            "vcpkg-install": ["openssl"]
+          }
+        ]
+      # FetchContent takes the fetched sources, and the *_REF variables keep their commits in the CMake cache.
+      # As in core's CI: OpenSSL from vcpkg on Windows, tests run as root on macOS, the macOS deployment target.
+      # GCC builds treat warnings as errors and, unlike MSVC and Clang builds, do not silence deprecations;
+      # OpcUaModules still calls APIs that core deprecates
+      cmake-presets: >
+        [
+          {
+            "configure-preset": "ci",
+            "test-preset": "ci-tests",
+            "build-targets": ["test_ref_modules", "test_device_modules", "test_device_modules_streaming"],
+            "cache-externals": true,
+            "cache-variables": {
+              "FETCHCONTENT_SOURCE_DIR_OPENDAQ": "${sourceDir}/build/_src/openDAQ",
+              "FETCHCONTENT_SOURCE_DIR_LTSTREAMINGMODULESMODERN": "${sourceDir}/build/_src/LTStreamingModulesModern",
+              "FETCHCONTENT_SOURCE_DIR_OPCUAMODULES": "${sourceDir}/build/_src/OpcUaModules",
+              "OPENDAQ_REF": "${{ needs.resolve.outputs.opendaq-sha }}",
+              "LT_MODULES_REF": "${{ needs.resolve.outputs.lt-modules-sha }}",
+              "OPCUA_MODULES_REF": "${{ needs.resolve.outputs.opcua-modules-sha }}"
+            }
+          },
+          {
+            "match-jobs": ["windows-*-x86_64-*"],
+            "cache-variables": {"OPENSSL_ROOT_DIR": "C:/vcpkg/installed/x64-windows"}
+          },
+          {
+            "match-jobs": ["ubuntu-*-gcc-*"],
+            "cache-variables": {"CMAKE_CXX_FLAGS": "-Wno-error=deprecated-declarations"}
+          },
+          {
+            "match-jobs": ["macos-*"],
+            "run-tests-priv": true
+          },
+          {
+            "match-jobs": ["macos-*-armv8-*"],
+            "cache-variables": {"CMAKE_OSX_DEPLOYMENT_TARGET": "11.0"}
+          }
+        ]
+
+  # Reports the test results of each build-and-test job as annotations. One report job per platform, because GitHub
+  # shows at most 10 error annotations per step; a job without results failed before any test ended
+  report:
+    name: Report ${{ matrix.name }}
+    needs: build-and-test
+    if: ${{ !cancelled() && needs.build-and-test.outputs.matrix != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: Windows x64
-            id: windows-x64
-            runner: windows-2022
-            preset: ci-windows
-          - name: Linux x64
-            id: linux-x64
-            runner: ubuntu-26.04
-            preset: ci-linux
-          - name: Linux arm64
-            id: linux-arm64
-            runner: ubuntu-26.04-arm
-            preset: ci-linux
-          - name: macOS arm64
-            id: macos-arm64
-            runner: macos-26
-            preset: ci-macos
-            xcode: /Applications/Xcode_26.6.app/Contents/Developer
-    defaults:
-      run:
-        shell: bash
-    env:
-      PRESET: ${{ matrix.preset }}
-      OPENDAQ_SHA: ${{ needs.resolve.outputs.opendaq-sha }}
-      LT_MODULES_SHA: ${{ needs.resolve.outputs.lt-modules-sha }}
-      OPCUA_MODULES_SHA: ${{ needs.resolve.outputs.opcua-modules-sha }}
-      # Picks the Xcode, and with it the Apple clang, on macOS; nothing reads it elsewhere
-      DEVELOPER_DIR: ${{ matrix.xcode }}
+      matrix: ${{ fromJSON(needs.build-and-test.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v7
 
-      - name: Check out openDAQ
-        uses: actions/checkout@v7
+      # A pattern rather than a name, so that a missing artifact is not an error
+      - name: Download the test results
+        uses: actions/download-artifact@v7
         with:
-          repository: openDAQ/openDAQ
-          ref: ${{ env.OPENDAQ_SHA }}
-          path: build/_src/openDAQ
-          persist-credentials: false
+          pattern: ${{ matrix.gtest-artifact }}
+          path: test-results
+          merge-multiple: true
 
-      - name: Check out LTStreamingModulesModern
-        uses: actions/checkout@v7
-        with:
-          repository: openDAQ/LTStreamingModulesModern
-          ref: ${{ env.LT_MODULES_SHA }}
-          path: build/_src/LTStreamingModulesModern
-          persist-credentials: false
-
-      - name: Check out OpcUaModules
-        uses: actions/checkout@v7
-        with:
-          repository: openDAQ/OpcUaModules
-          ref: ${{ env.OPCUA_MODULES_SHA }}
-          path: build/_src/OpcUaModules
-          persist-credentials: false
-
-      # Core generates code with Mono on Linux and macOS; the Linux packages are the ones core's CI installs on Ubuntu 26.04
-      - name: Install dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y g++-15 ninja-build mono-runtime mono-libraries lld libssl-dev \
-            libx11-dev libxi-dev libxcursor-dev libxrandr-dev libgl-dev libudev-dev libfreetype-dev
-
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: brew install mono
-
-      # The checked out sources replace the FetchContent downloads; CMake gets the paths with forward slashes
-      - name: Configure
-        run: |
-          src="${GITHUB_WORKSPACE//\\//}/build/_src"
-          cmake --preset "$PRESET" \
-            -DFETCHCONTENT_SOURCE_DIR_OPENDAQ="$src/openDAQ" -DOPENDAQ_REF="$OPENDAQ_SHA" \
-            -DFETCHCONTENT_SOURCE_DIR_LTSTREAMINGMODULESMODERN="$src/LTStreamingModulesModern" -DLT_MODULES_REF="$LT_MODULES_SHA" \
-            -DFETCHCONTENT_SOURCE_DIR_OPCUAMODULES="$src/OpcUaModules" -DOPCUA_MODULES_REF="$OPCUA_MODULES_SHA"
-
-      - name: Build
-        run: cmake --build --preset "$PRESET" --parallel
-
-      # The JUnit file keeps the end of a failed test app's output, which names the test running when it crashed
-      - name: Test
-        run: |
-          results="${GITHUB_WORKSPACE//\\//}/build/test-results"
-          mkdir -p "$results/gtest"
-          GTEST_OUTPUT="xml:$results/gtest/" ctest --preset "$PRESET" \
-            --output-junit "$results/ctest-junit.xml" --test-output-truncation head
-
-      # Python 3 is python on the Windows runners and python3 on the Linux and macOS runners
       - name: Report the test results
-        if: ${{ !cancelled() }}
         env:
-          PLATFORM: ${{ matrix.name }}
-          PYTHON: ${{ runner.os == 'Windows' && 'python' || 'python3' }}
-          PYTHONUTF8: 1
+          JOB: ${{ matrix.name }}
         run: >
-          "$PYTHON" .github/scripts/annotate_test_results.py --platform "$PLATFORM"
-          --gtest-xml-dir build/test-results/gtest --ctest-junit build/test-results/ctest-junit.xml
-
-      - name: Upload the test results
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-results-${{ matrix.id }}
-          path: |
-            build/test-results
-            build/${{ matrix.preset }}/Testing/Temporary/LastTest.log
-          if-no-files-found: ignore
-          retention-days: 14
+          python3 .github/scripts/annotate_test_results.py --platform "$JOB"
+          --gtest-xml-dir test-results --ctest-junit test-results/ctest/ctest-junit.xml

@@ -5,9 +5,11 @@
   a timeout), naming the test that was running;
 - one error per failed test, linked to the failing line when it is in this repository.
 
-Reads the gtest XML files (GTEST_OUTPUT=xml:<folder>/) and the ctest JUnit file (ctest --output-junit, run with
---test-output-truncation head so that a failed test app keeps the end of its output). GitHub shows at most 10 error
-annotations per step, so the errors past the ninth are counted in the last one; all of them are printed to the log.
+Reads the gtest XML files (GTEST_OUTPUT=xml:<folder>/) and the ctest JUnit file (written as the test preset ci-tests
+sets: output truncated at its head, so that a failed test app keeps the end of its output). The files may come from
+another machine: failure locations are matched to this repository's files by the end of their paths. GitHub shows at
+most 10 error annotations per step, so the errors past the ninth are counted in the last one; all of them are printed
+to the log.
 """
 
 import argparse
@@ -40,19 +42,29 @@ def annotate(level, title, message, file=None, line=None):
 
 
 def tracked_files(source_root):
+    """{lower-case path: path} of the files of this repository"""
     try:
         output = subprocess.run(["git", "-C", source_root, "ls-files"], check=True, capture_output=True, text=True)
     except (OSError, subprocess.CalledProcessError):
-        return set()
-    return set(output.stdout.splitlines())
+        return {}
+    return {path.lower(): path for path in output.stdout.splitlines()}
 
 
-def repo_location(path, line, source_root, tracked):
-    """(path relative to the repository, line) when the path is a file of this repository, else (None, None)"""
-    path = path.replace("\\", "/")
-    root = source_root.replace("\\", "/").rstrip("/") + "/"
-    if path.lower().startswith(root.lower()) and path[len(root):] in tracked:
-        return path[len(root):], line
+def repo_location(path, line, tracked):
+    """(path relative to the repository, line) when the path is a file of this repository, else (None, None)
+
+    The path is the build machine's, and its checkout folder differs per platform (D:\\a\\..., /__w/... in containers,
+    /Users/runner/...), so the longest end of the path that is a file of this repository is taken. A path in the
+    build folder, which holds the fetched sources and dependencies, is not a file of this repository.
+    """
+    if not path:
+        return None, None
+    parts = path.replace("\\", "/").split("/")
+    for start in range(len(parts)):
+        file = tracked.get("/".join(parts[start:]).lower())
+        if file:
+            in_build_folder = any(part.lower() == "build" for part in parts[:start])
+            return (None, None) if in_build_folder else (file, line)
     return None, None
 
 
@@ -96,7 +108,8 @@ def main():
     parser.add_argument("--platform", required=True, help="name in the annotations, e.g. Windows")
     parser.add_argument("--gtest-xml-dir", type=pathlib.Path, required=True)
     parser.add_argument("--ctest-junit", type=pathlib.Path, required=True)
-    parser.add_argument("--source-root", default=os.environ.get("GITHUB_WORKSPACE", os.getcwd()))
+    parser.add_argument("--source-root", default=os.environ.get("GITHUB_WORKSPACE", os.getcwd()),
+                        help="checkout of this repository, for the list of its files")
     args = parser.parse_args()
 
     tracked = tracked_files(args.source_root)
@@ -112,7 +125,7 @@ def main():
                 continue
             apps_with_failures.add(xml_file.stem)
             text = "\n\n".join((failure.text or failure.get("message", "")).strip() for failure in case.iter("failure"))
-            file, line = repo_location(*failure_location(case, text), args.source_root, tracked)
+            file, line = repo_location(*failure_location(case, text), tracked)
             name = f"{case.get('classname')}.{case.get('name')}"
             errors.append((f"{args.platform}: {name} failed", trimmed(text), file, line))
 
@@ -133,7 +146,7 @@ def main():
             errors.insert(len(apps_without_results) - 1, (f"{args.platform}: {app} ended with {reason}", message, None, None))
 
     if not xml_files and not args.ctest_junit.is_file():
-        annotate("notice", f"{args.platform}: no test results", "No test ran: the build or the test step failed before any test ended.")
+        annotate("notice", f"{args.platform}: no test results", "No test ran: the configure, build or test step failed before any test ended.")
         return 0
 
     summary = f"{sum(counts.values())} tests: " + ", ".join(f"{count} {name}" for name, count in counts.items())
