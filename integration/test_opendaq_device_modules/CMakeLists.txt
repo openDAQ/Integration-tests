@@ -1,3 +1,6 @@
+# Set before the apps are created: $<TARGET_FILE_DIR> of an app then adds no dependency on it (lt_tls_secrets below)
+cmake_policy(SET CMP0112 NEW)
+
 set(TEST_HEADERS
     test_helpers/test_helpers.h
     test_helpers/device_modules.h
@@ -35,6 +38,7 @@ function(add_device_modules_test_app APP)
     target_link_libraries(${APP} PRIVATE daq::test_utils
                                          daq::opendaq
                                          daq::opendaq_mocks
+                                         daq::config_protocol
     )
 
     integration_tests_use_modules(${APP}
@@ -93,12 +97,13 @@ if (OPENDAQ_INTEGRATION_TESTS_LT_TLS)
                             "The LT streaming tests over the secure channel need them to load their secrets.")
     endif()
 
-    foreach(APP ${TEST_APP} ${STREAMING_TEST_APP})
-        add_custom_command(TARGET ${APP} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                    ${LT_TLS_SECRETS_DIR}
-                    $<TARGET_FILE_DIR:${APP}>/secrets)
-    endforeach()
+    # One copy for both apps: they share an output directory, and two parallel copies into it fail on Windows
+    add_custom_target(lt_tls_secrets
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${LT_TLS_SECRETS_DIR}
+                $<TARGET_FILE_DIR:${TEST_APP}>/secrets)
+    add_dependencies(${TEST_APP} lt_tls_secrets)
+    add_dependencies(${STREAMING_TEST_APP} lt_tls_secrets)
 endif()
 
 add_test(NAME ${TEST_APP}
