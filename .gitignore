@@ -44,3 +44,6 @@ bckp
 # cmake
 CMakeUserPresets.json
 CMakeSettings.json
+
+# local helpers for running the tests, not part of the repository
+/local/

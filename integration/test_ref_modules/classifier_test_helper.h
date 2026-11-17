@@ -19,12 +19,12 @@
 #include <opendaq/data_descriptor_factory.h>
 #include <opendaq/data_rule_factory.h>
 #include <opendaq/instance_factory.h>
+#include <opendaq/module_manager_ptr.h>
 #include <opendaq/packet_factory.h>
 #include <opendaq/reader_utils.h>
 #include <opendaq/sample_type_traits.h>
 #include <opendaq/scheduler_factory.h>
 #include <opendaq/signal_factory.h>
-#include <ref_fb_module/module_dll.h>
 #include <testutils/testutils.h>
 #include <random>
 
@@ -38,12 +38,7 @@ struct ClassifierTestHelper
         domainIsSync = domainSync;
 
         instance = Instance("[[none]]");
-        {
-            ModulePtr refFbModule;
-            createRefFBModule(&refFbModule, instance.getContext());
-
-            instance.getModuleManager().addModule(refFbModule);
-        }
+        instance.getModuleManager().loadModule(INTEGRATION_TESTS_MODULE_FILE_ref_fb_module);
 
         context = instance.getContext();
         scheduler = context.getScheduler();

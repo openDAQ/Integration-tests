@@ -24,8 +24,24 @@
 #include <fstream>
 #include <cstdlib>
 #include <algorithm>
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/io_service.hpp>
+#include <string>
+
+// For Ipv6IsDisabled. Lean <windows.h> without min/max macros, as Boost.Asio used to set it up here
+#ifdef _WIN32
+    #ifndef WIN32_LEAN_AND_MEAN
+        #define WIN32_LEAN_AND_MEAN
+    #endif
+    #ifndef NOMINMAX
+        #define NOMINMAX
+    #endif
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+#else
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <netdb.h>
+#endif
 
 #include <opendaq/opendaq.h>
 #include <testutils/testutils.h>
@@ -254,17 +270,33 @@ namespace test_helpers
     [[maybe_unused]]
     inline bool Ipv6IsDisabled(bool testExternalAddrConnectivity = false)
     {
-        std::string hostName = testExternalAddrConnectivity ? "ipv6.google.com" : "localhost";
+        const std::string hostName = testExternalAddrConnectivity ? "ipv6.google.com" : "localhost";
 
-        boost::asio::io_service service;
-        boost::asio::ip::tcp::resolver resolver(service);
+#ifdef _WIN32
+        WSADATA wsaData;
+        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+            return true;
+#endif
 
         // Resolve a localhost (or external) address. If IPv6 is available, it should resolve to an IPv6 address.
-        boost::asio::ip::tcp::resolver::query query(boost::asio::ip::tcp::v6(), hostName, "");
+        // Same query as the Boost.Asio resolver this replaces: TCP over IPv6, only when the host has an IPv6
+        // address configured (AI_ADDRCONFIG, the default flag of that resolver's queries), no service.
+        addrinfo hints{};
+        hints.ai_family = AF_INET6;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_protocol = IPPROTO_TCP;
+        hints.ai_flags = AI_ADDRCONFIG;
 
-        boost::system::error_code ec;
-        auto it = resolver.resolve(query, ec);
-        return ec.failed();
+        addrinfo* result = nullptr;
+        const int error = getaddrinfo(hostName.c_str(), nullptr, &hints, &result);
+        if (result != nullptr)
+            freeaddrinfo(result);
+
+#ifdef _WIN32
+        WSACleanup();
+#endif
+
+        return error != 0;
     }
 
     [[maybe_unused]]

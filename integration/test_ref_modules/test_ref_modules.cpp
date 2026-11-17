@@ -15,8 +15,7 @@
 #include "classifier_test_helper.h"
 #include "testutils/memcheck_listener.h"
 #include <opendaq/logger_sink_last_message_private_ptr.h>
-#include <ref_device_module/module_dll.h>
-#include <ref_fb_module/module_dll.h>
+#include <opendaq/module_manager_ptr.h>
 
 using RefModulesTest = testing::Test;
 using namespace daq;
@@ -35,15 +34,9 @@ static InstancePtr CreateRefInstance(const StringPtr& localId = "")
 {
     auto instance = Instance("[[none]]", localId);
     {
-        ModulePtr refDeviceModule;
-        createRefDeviceModule(&refDeviceModule, instance.getContext());
-
-        ModulePtr refFbModule;
-        createRefFBModule(&refFbModule, instance.getContext());
-
         auto mm = instance.getModuleManager();
-        mm.addModule(refDeviceModule);
-        mm.addModule(refFbModule);
+        mm.loadModule(INTEGRATION_TESTS_MODULE_FILE_ref_device_module);
+        mm.loadModule(INTEGRATION_TESTS_MODULE_FILE_ref_fb_module);
     }
     return instance;
 }
@@ -332,13 +325,7 @@ TEST_F(RefModulesTest, DISABLED_RendererSync)
 TEST_F(InvertDestructOrderTest, InvertedDestructOrder)
 {
     auto instance = Instance("[[none]]");
-    {
-        ModulePtr refDeviceModule;
-        createRefDeviceModule(&refDeviceModule, instance.getContext());
-
-        instance.getModuleManager()
-                .addModule(refDeviceModule);
-    }
+    instance.getModuleManager().loadModule(INTEGRATION_TESTS_MODULE_FILE_ref_device_module);
 
     auto device = instance.addDevice("daqref://device1");
 
@@ -1126,13 +1113,7 @@ TEST_F(RefModulesTest, ScalingFbStatuses)
         .setLogger(logger)
         .build();
 
-    {
-        ModulePtr refFbModule;
-        createRefFBModule(&refFbModule, instance.getContext());
-
-        instance.getModuleManager()
-                .addModule(refFbModule);
-    }
+    instance.getModuleManager().loadModule(INTEGRATION_TESTS_MODULE_FILE_ref_fb_module);
 
     const auto signal =
         SignalWithDescriptor(instance.getContext(),
@@ -1275,12 +1256,7 @@ TEST_F(RefModulesTest, ConfigureDeviceFromOptions)
         .addConfigProvider(JsonConfigProvider(configFilename))
         .build();
 
-    {
-        ModulePtr refDeviceModule;
-        createRefDeviceModule(&refDeviceModule, instance.getContext()); 
-
-        instance.getModuleManager().addModule(refDeviceModule);
-    }
+    instance.getModuleManager().loadModule(INTEGRATION_TESTS_MODULE_FILE_ref_device_module);
 
     const auto device = instance.addDevice("daqref://device1");
 

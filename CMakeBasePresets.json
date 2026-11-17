@@ -227,6 +227,37 @@
                 "lhs": "${hostSystemName}",
                 "rhs": "Darwin"
             }
+        },
+        {
+            "name": "prebuilt",
+            "hidden": true,
+            "description": "Tests against an installed openDAQ core and installed modules (stagings), Release only: only the test apps are built. Give CMAKE_PREFIX_PATH (the core prefix) and the other inputs listed in cmake/FromPrebuilt.cmake",
+            "inherits": [
+                "release"
+            ],
+            "cacheVariables": {
+                "OPENDAQ_INTEGRATION_TESTS_FROM": "PREBUILT",
+                "CMAKE_CONFIGURATION_TYPES": "Release"
+            }
+        },
+        {
+            "name": "msvc22-prebuilt",
+            "displayName": "[MSVC 22] x64 - prebuilt core and modules",
+            "inherits": [
+                "integration",
+                "prebuilt",
+                "msvc-22",
+                "msvc-x64"
+            ]
+        },
+        {
+            "name": "ci-prebuilt",
+            "displayName": "[CI] Default generator - prebuilt core and modules",
+            "description": "The ci preset against prebuilt core and modules; in the CI, openDAQ-CI's generated presets add the toolchain of the job the stagings were built with",
+            "inherits": [
+                "ci",
+                "prebuilt"
+            ]
         }
     ],
     "buildPresets": [
@@ -317,6 +348,20 @@
             "name": "ci-macos",
             "displayName": "[CI] macOS: AppleClang - Release",
             "configurePreset": "ci-macos",
+            "configuration": "Release",
+            "inherits": "test-apps"
+        },
+        {
+            "name": "msvc22-prebuilt",
+            "displayName": "[MSVC 22] x64 - prebuilt core and modules",
+            "configurePreset": "msvc22-prebuilt",
+            "configuration": "Release",
+            "inherits": "test-apps"
+        },
+        {
+            "name": "ci-prebuilt",
+            "displayName": "[CI] Default generator - prebuilt core and modules",
+            "configurePreset": "ci-prebuilt",
             "configuration": "Release",
             "inherits": "test-apps"
         }
@@ -417,6 +462,20 @@
             "name": "ci-macos",
             "displayName": "[CI] macOS: AppleClang - Release",
             "configurePreset": "ci-macos",
+            "configuration": "Release",
+            "inherits": "run_tests"
+        },
+        {
+            "name": "msvc22-prebuilt",
+            "displayName": "[MSVC 22] x64 - prebuilt core and modules",
+            "configurePreset": "msvc22-prebuilt",
+            "configuration": "Release",
+            "inherits": "run_tests"
+        },
+        {
+            "name": "ci-prebuilt",
+            "displayName": "[CI] Default generator - prebuilt core and modules",
+            "configurePreset": "ci-prebuilt",
             "configuration": "Release",
             "inherits": "run_tests"
         }

@@ -24,23 +24,26 @@ if (CMAKE_GENERATOR MATCHES "Visual Studio")
     list(APPEND CMAKE_VS_GLOBALS "VcpkgEnabled=false")
 endif()
 
-# Branch, tag or commit of each fetched repository: read from its *_ref file unless given as -D<REF_VAR>=<ref>
-function(integration_tests_read_ref REF_VAR REF_FILE)
-    if (NOT DEFINED ${REF_VAR})
-        opendaq_read_file_contents("${PROJECT_SOURCE_DIR}/${REF_FILE}" REF)
-        set(${REF_VAR} "${REF}" PARENT_SCOPE)
-    endif()
-endfunction()
-
-integration_tests_read_ref(OPENDAQ_REF opendaq_ref)
-integration_tests_read_ref(LT_MODULES_REF lt_modules_ref)
-integration_tests_read_ref(OPCUA_MODULES_REF opcua_modules_ref)
+# Where openDAQ core and the modules the tests use come from:
+#   SOURCES   fetched and built together with the tests (cmake/FromSources.cmake)
+#   PREBUILT  installed ones: core and module stagings, a bundle or an installed SOURCES build; only the test apps
+#             are built (cmake/FromPrebuilt.cmake)
+set(OPENDAQ_INTEGRATION_TESTS_FROM "SOURCES" CACHE STRING "Where openDAQ core and the modules come from: SOURCES or PREBUILT")
+set_property(CACHE OPENDAQ_INTEGRATION_TESTS_FROM PROPERTY STRINGS SOURCES PREBUILT)
+if (NOT OPENDAQ_INTEGRATION_TESTS_FROM STREQUAL "SOURCES" AND NOT OPENDAQ_INTEGRATION_TESTS_FROM STREQUAL "PREBUILT")
+    message(FATAL_ERROR "OPENDAQ_INTEGRATION_TESTS_FROM must be SOURCES or PREBUILT, not \"${OPENDAQ_INTEGRATION_TESTS_FROM}\"")
+endif()
+message(STATUS "openDAQ core and modules from: ${OPENDAQ_INTEGRATION_TESTS_FROM}")
 
 # options
 set(OPENDAQ_ENABLE_UNITY_LIBS ON CACHE BOOL "Unity builds for libraries")
 opendaq_setup_common_build_options()
 opendaq_setup_project_specific_build_options(${REPO_OPTION_PREFIX})
 option(OPENDAQ_ENABLE_REGRESSION_TESTS "Enable regression testing" OFF)
+
+if (OPENDAQ_ENABLE_REGRESSION_TESTS AND NOT OPENDAQ_INTEGRATION_TESTS_FROM STREQUAL "SOURCES")
+    message(FATAL_ERROR "OPENDAQ_ENABLE_REGRESSION_TESTS needs OPENDAQ_INTEGRATION_TESTS_FROM=SOURCES")
+endif()
 
 opendaq_common_compile_targets_settings()
 opendaq_setup_compiler_flags(${REPO_OPTION_PREFIX})
@@ -51,72 +54,13 @@ endif()
 
 enable_testing()
 
-# Parts of openDAQ core the tests use
-set(OPENDAQ_ENABLE_TESTS OFF CACHE BOOL "")
-set(OPENDAQ_ENABLE_TEST_UTILS ON CACHE BOOL "")
-set(OPENDAQ_ENABLE_NATIVE_STREAMING ON CACHE BOOL "")
-set(DAQMODULES_OPENDAQ_CLIENT_MODULE ON CACHE BOOL "")
-set(DAQMODULES_OPENDAQ_SERVER_MODULE ON CACHE BOOL "")
-set(DAQMODULES_REF_DEVICE_MODULE ON CACHE BOOL "")
-set(DAQMODULES_REF_FB_MODULE ON CACHE BOOL "")
-
-# This project adds the OPC UA and LT streaming modules itself, so core must not fetch its own copies
-foreach(CORE_OPTION OPENDAQ_ENABLE_OPCUA OPENDAQ_ENABLE_WEBSOCKET_STREAMING)
-    if (${CORE_OPTION})
-        message(FATAL_ERROR "${CORE_OPTION} must be OFF: ${REPO_NAME} adds the OPC UA and LT streaming modules itself")
+# Branch, tag or commit of each fetched repository: read from its *_ref file unless given as -D<REF_VAR>=<ref>
+function(integration_tests_read_ref REF_VAR REF_FILE)
+    if (NOT DEFINED ${REF_VAR})
+        opendaq_read_file_contents("${PROJECT_SOURCE_DIR}/${REF_FILE}" REF)
+        set(${REF_VAR} "${REF}" PARENT_SCOPE)
     endif()
-endforeach()
-
-# Modules the tests use; tests and example apps of the module projects stay off when they are subprojects
-set(DAQMODULES_LT_STREAMING_ENABLE_CLIENT ON CACHE BOOL "")
-set(DAQMODULES_LT_STREAMING_ENABLE_SERVER ON CACHE BOOL "")
-set(DAQMODULES_LT_STREAMING_ENABLE_TLS ON CACHE BOOL "")
-set(DAQMODULES_OPCUA_ENABLE_CLIENT ON CACHE BOOL "")
-set(DAQMODULES_OPCUA_ENABLE_SERVER ON CACHE BOOL "")
-
-include(FetchContent)
-
-# The module projects are fetched before core but added after it: their Boost components have to be
-# registered before core sets up Boost (the same order as core's external_modules/)
-opendaq_get_custom_fetch_content_params(LtStreamingModulesModern FC_PARAMS)
-FetchContent_Declare(
-    LtStreamingModulesModern
-    GIT_REPOSITORY https://github.com/openDAQ/LTStreamingModulesModern.git
-    GIT_TAG        ${LT_MODULES_REF}
-    GIT_PROGRESS   ON
-    GIT_SHALLOW    OFF
-    SOURCE_SUBDIR  "INVALID"
-    GIT_REMOTE_UPDATE_STRATEGY CHECKOUT
-    ${FC_PARAMS}
-)
-
-opendaq_get_custom_fetch_content_params(OpcUaModules FC_PARAMS)
-FetchContent_Declare(
-    OpcUaModules
-    GIT_REPOSITORY https://github.com/openDAQ/OpcUaModules.git
-    GIT_TAG        ${OPCUA_MODULES_REF}
-    GIT_PROGRESS   ON
-    GIT_SHALLOW    OFF
-    SOURCE_SUBDIR  "INVALID"
-    GIT_REMOTE_UPDATE_STRATEGY CHECKOUT
-    ${FC_PARAMS}
-)
-
-FetchContent_MakeAvailable(LtStreamingModulesModern OpcUaModules)
-
-include("${ltstreamingmodulesmodern_SOURCE_DIR}/external/boost/Boost.cmake")
-include("${opcuamodules_SOURCE_DIR}/external/boost/Boost.cmake")
-
-opendaq_get_custom_fetch_content_params(${OPENDAQ_SDK_NAME} FC_PARAMS)
-FetchContent_Declare(
-    ${OPENDAQ_SDK_NAME}
-    GIT_REPOSITORY https://github.com/openDAQ/openDAQ.git
-    GIT_TAG        ${OPENDAQ_REF}
-    GIT_PROGRESS   ON
-    GIT_REMOTE_UPDATE_STRATEGY CHECKOUT
-    ${FC_PARAMS}
-)
-FetchContent_MakeAvailable(${OPENDAQ_SDK_NAME})
+endfunction()
 
 find_package(Git REQUIRED)
 
@@ -132,47 +76,27 @@ function(integration_tests_print_commit REPO REF)
     message(STATUS "${REPO} at ${REF}: ${COMMIT}")
 endfunction()
 
-integration_tests_print_commit(${OPENDAQ_SDK_NAME} ${OPENDAQ_REF})
-integration_tests_print_commit(LtStreamingModulesModern ${LT_MODULES_REF})
-integration_tests_print_commit(OpcUaModules ${OPCUA_MODULES_REF})
+# The modules the test apps load from their binaries (integration_tests_use_modules() in integration/CMakeLists.txt),
+# by the base name of their binaries ([lib]<name>-<version>[-debug].module.<dll|so|dylib>)
+set(INTEGRATION_TESTS_MODULES
+    native_stream_srv_module
+    native_stream_cl_module
+    ws_stream_srv_module
+    ws_stream_cl_module
+    opcua_server_module
+    opcua_client_module
+    ref_device_module
+    ref_fb_module
+)
 
-# Core sets the following on its own directory only. Repeat them for the modules and tests added below, so
-# they compile the core headers the same way the core libraries were compiled. The LT streaming switches
-# are left out on purpose: the tests take them from the LT modules project.
-list(APPEND CMAKE_MODULE_PATH "${opendaq_SOURCE_DIR}/cmake")
-find_package(Filesystem REQUIRED COMPONENTS Final Experimental)
-
-include(openDAQLogging)
-opendaq_log_level_str_to_int(${OPENDAQ_LOG_LEVEL_DEBUG} OPENDAQ_LOG_LEVEL_DEBUG_INT)
-opendaq_log_level_str_to_int(${OPENDAQ_LOG_LEVEL_RELEASE} OPENDAQ_LOG_LEVEL_RELEASE_INT)
-add_compile_definitions(OPENDAQ_LOG_LEVEL=$<IF:$<CONFIG:Debug>,${OPENDAQ_LOG_LEVEL_DEBUG_INT},${OPENDAQ_LOG_LEVEL_RELEASE_INT}>)
-
-add_compile_definitions(BOOST_ALL_NO_LIB=1)
-
-foreach(CORE_DEFINE OPENDAQ_ENABLE_ERROR_GUARD
-                    OPENDAQ_ENABLE_NATIVE_STREAMING
-                    OPENDAQ_ENABLE_OPTIONAL_TESTS
-                    OPENDAQ_ENABLE_UNSTABLE_TEST_LABELS
-                    OPENDAQ_MIMALLOC_SUPPORT)
-    if (${CORE_DEFINE})
-        add_compile_definitions(${CORE_DEFINE})
-    endif()
-endforeach()
-
-# Core forces OPENDAQ_SKIP_UNSTABLE_TESTS on (as a non-cache variable) while unstable test labels are off
-if (NOT OPENDAQ_ENABLE_UNSTABLE_TEST_LABELS OR OPENDAQ_SKIP_UNSTABLE_TESTS)
-    add_compile_definitions(OPENDAQ_SKIP_UNSTABLE_TESTS)
+# Provides what integration/ needs: daq::opendaq, daq::opendaq_mocks, daq::test_utils, the opendaq_test_* CMake
+# functions, the directory-level defines core compiles with, INTEGRATION_TESTS_MODULE_FILE_<module> (the module
+# binaries the tests load), OPENDAQ_INTEGRATION_TESTS_LT_TLS and LT_MODULES_SOURCE_DIR
+if (OPENDAQ_INTEGRATION_TESTS_FROM STREQUAL "SOURCES")
+    include(cmake/FromSources.cmake)
+else()
+    include(cmake/FromPrebuilt.cmake)
 endif()
-
-if (OPENDAQ_CI_RUNNER)
-    add_compile_definitions(DS_CI_RUNNER=1)
-endif()
-
-add_subdirectory("${ltstreamingmodulesmodern_SOURCE_DIR}" "${ltstreamingmodulesmodern_BINARY_DIR}")
-add_subdirectory("${opcuamodules_SOURCE_DIR}" "${opcuamodules_BINARY_DIR}")
-
-# Used by the tests to find the LT streaming TLS fixtures
-set(LT_MODULES_SOURCE_DIR "${ltstreamingmodulesmodern_SOURCE_DIR}")
 
 opendaq_set_cmake_folder_context(TARGET_FOLDER_NAME)
 

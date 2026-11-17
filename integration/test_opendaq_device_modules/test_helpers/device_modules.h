@@ -16,75 +16,47 @@
 
 #pragma once
 #include <opendaq/instance_ptr.h>
-#include <native_streaming_client_module/module_dll.h>
-#include <native_streaming_server_module/module_dll.h>
-#include <opcua_client_module/module_dll.h>
-#include <opcua_server_module/module_dll.h>
-#include <websocket_streaming_client_module/module_dll.h>
-#include <websocket_streaming_server_module/module_dll.h>
-#include <ref_device_module/module_dll.h>
-#include <ref_fb_module/module_dll.h>
+#include <opendaq/module_manager_ptr.h>
+
+// The modules are not linked into the test apps: the instance's module manager loads them from their binaries.
+// The build passes their paths as INTEGRATION_TESTS_MODULE_FILE_<module> (integration_tests_use_modules()).
 
 inline void addNativeServerModule(const daq::InstancePtr& instance)
 {
-    daq::ModulePtr nativeServerModule;
-    createNativeStreamingServerModule(&nativeServerModule, instance.getContext());
-
-    instance.getModuleManager().addModule(nativeServerModule);
+    instance.getModuleManager().loadModule(INTEGRATION_TESTS_MODULE_FILE_native_stream_srv_module);
 }
 
 inline void addNativeClientModule(const daq::InstancePtr& instance)
 {
-    daq::ModulePtr nativeClientModule;
-    createNativeStreamingClientModule(&nativeClientModule, instance.getContext());
-
-    instance.getModuleManager().addModule(nativeClientModule);
+    instance.getModuleManager().loadModule(INTEGRATION_TESTS_MODULE_FILE_native_stream_cl_module);
 }
 
 inline void addLtServerModule(const daq::InstancePtr& instance)
 {
-    daq::ModulePtr ltServerModule;
-    createWsStreamingServerModule(&ltServerModule, instance.getContext());
-
-    instance.getModuleManager().addModule(ltServerModule);
+    instance.getModuleManager().loadModule(INTEGRATION_TESTS_MODULE_FILE_ws_stream_srv_module);
 }
 
 inline void addLtClientModule(const daq::InstancePtr& instance)
 {
-    daq::ModulePtr ltClientModule;
-    createWebsocketStreamingClientModule(&ltClientModule, instance.getContext());
-
-    instance.getModuleManager().addModule(ltClientModule);
+    instance.getModuleManager().loadModule(INTEGRATION_TESTS_MODULE_FILE_ws_stream_cl_module);
 }
 
 inline void addOpcuaServerModule(const daq::InstancePtr& instance)
 {
-    daq::ModulePtr opcuaServerModule;
-    createOpcUaServerModule(&opcuaServerModule, instance.getContext());
-
-    instance.getModuleManager().addModule(opcuaServerModule);
+    instance.getModuleManager().loadModule(INTEGRATION_TESTS_MODULE_FILE_opcua_server_module);
 }
 
 inline void addOpcuaClientModule(const daq::InstancePtr& instance)
 {
-    daq::ModulePtr opcuaClientModule;
-    createOpcUaClientModule(&opcuaClientModule, instance.getContext());
-
-    instance.getModuleManager().addModule(opcuaClientModule);
+    instance.getModuleManager().loadModule(INTEGRATION_TESTS_MODULE_FILE_opcua_client_module);
 }
 
 inline void addRefDeviceModule(const daq::InstancePtr& instance)
 {
-    daq::ModulePtr refDeviceModule;
-    createRefDeviceModule(&refDeviceModule, instance.getContext());
-
-    instance.getModuleManager().addModule(refDeviceModule);
+    instance.getModuleManager().loadModule(INTEGRATION_TESTS_MODULE_FILE_ref_device_module);
 }
 
 inline void addRefFBModule(const daq::InstancePtr& instance)
 {
-    daq::ModulePtr refFBModule;
-    createRefFBModule(&refFBModule, instance.getContext());
-
-    instance.getModuleManager().addModule(refFBModule);
+    instance.getModuleManager().loadModule(INTEGRATION_TESTS_MODULE_FILE_ref_fb_module);
 }

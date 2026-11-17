@@ -1,10 +1,3 @@
-#include <native_streaming_client_module/module_dll.h>
-#include <native_streaming_server_module/module_dll.h>
-#include <opcua_client_module/module_dll.h>
-#include <opcua_server_module/module_dll.h>
-#include <websocket_streaming_client_module/module_dll.h>
-#include <websocket_streaming_server_module/module_dll.h>
-
 #include "opendaq/mock/mock_device_module.h"
 #include "test_helpers/device_modules.h"
 #include "test_helpers/test_helpers.h"
@@ -316,24 +309,14 @@ TEST_F(ConnectedClientsDiscoveryTest, NativeConnectedClients)
 TEST_F(ConnectedClientsDiscoveryTest, LtConnectedClients)
 {
     // Add LT Server Module
-    {
-        ModulePtr ltServerModule;
-        createWsStreamingServerModule(&ltServerModule, serverInstance.getContext());
-
-        serverInstance.getModuleManager().addModule(ltServerModule);
-    }
+    addLtServerModule(serverInstance);
 
     serverInstance.addServer("OpenDAQLTStreaming", nullptr).enableDiscovery();
 
     ASSERT_EQ(getConnectedClients().getCount(), 0u);
     {
         // Add LT Client Module
-        {
-            ModulePtr ltClientModule;
-            createWebsocketStreamingClientModule(&ltClientModule, clientInstance.getContext());
-
-            clientInstance.getModuleManager().addModule(ltClientModule);
-        }
+        addLtClientModule(clientInstance);
 
         auto device = clientInstance.addDevice("daq.lt://127.0.0.1");
         auto connectedClientsInfo = waitForConnectedClients(1);
@@ -352,24 +335,14 @@ TEST_F(ConnectedClientsDiscoveryTest, LtConnectedClients)
 TEST_F(ConnectedClientsDiscoveryTest, OpcuaConnectedClients)
 {
     // Add OpcUA Server Module
-    {
-        ModulePtr opcuaServerModule;
-        createOpcUaServerModule(&opcuaServerModule, serverInstance.getContext());
-
-        serverInstance.getModuleManager().addModule(opcuaServerModule);
-    }
+    addOpcuaServerModule(serverInstance);
 
     serverInstance.addServer("OpenDAQOPCUA", nullptr).enableDiscovery();
 
     ASSERT_EQ(getConnectedClients().getCount(), 0u);
     {
         // Add OpcUA Client Module
-        {
-            ModulePtr opcuaClientModule;
-            createOpcUaClientModule(&opcuaClientModule, clientInstance.getContext());
-
-            clientInstance.getModuleManager().addModule(opcuaClientModule);
-        }
+        addOpcuaClientModule(clientInstance);
 
         auto device = clientInstance.addDevice("daq.opcua://127.0.0.1");
         auto connectedClientsInfo = waitForConnectedClients(1);

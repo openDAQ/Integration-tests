@@ -4,9 +4,7 @@
 #include <coreobjects/user_factory.h>
 #include <opendaq/search_filter_factory.h>
 #include <coreobjects/authentication_provider_factory.h>
-#include <native_streaming_client_module/module_dll.h>
 #include <opendaq/device_private_ptr.h>
-#include <native_streaming_server_module/module_dll.h>
 
 using namespace daq;
 
@@ -26,15 +24,13 @@ public:
         users.pushBack(UserJure);
         auto authenticationProvider = StaticAuthenticationProvider(false, users);
 
+        // The context has the module manager load its modules, after which it can load more from their binaries
         auto context = Context(Scheduler(logger, 1), logger, TypeManager(), moduleManager, authenticationProvider);
         {
             const ModulePtr mockModule(MockDeviceModule_Create(context));
-            
-            ModulePtr nativeServerModule;
-            createNativeStreamingServerModule(&nativeServerModule, context);
 
             moduleManager.addModule(mockModule);
-            moduleManager.addModule(nativeServerModule);
+            moduleManager.loadModule(INTEGRATION_TESTS_MODULE_FILE_native_stream_srv_module);
         }
 
         auto instance = InstanceCustom(context, "clientInstance");
@@ -50,14 +46,11 @@ public:
         {
             auto context = instance.getContext();
 
-            ModulePtr nativeClientModule;
-            createNativeStreamingClientModule(&nativeClientModule, context);            
-
             const ModulePtr deviceModule(MockDeviceModule_Create(context));
             auto mm = instance.getModuleManager();
-            
+
             mm.addModule(deviceModule);
-            mm.addModule(nativeClientModule);
+            mm.loadModule(INTEGRATION_TESTS_MODULE_FILE_native_stream_cl_module);
         }
 
         auto config = instance.createDefaultAddDeviceConfig();

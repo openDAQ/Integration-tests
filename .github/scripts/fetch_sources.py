@@ -1,5 +1,8 @@
 """Fetches openDAQ, LTStreamingModulesModern and OpcUaModules at given commits into build/_src/<name>.
 
+Fetches the repositories whose commits are given, at least one: all three for a build from sources, only
+LTStreamingModulesModern (for its TLS test fixtures) for a build against prebuilt stagings.
+
 Runs as the packages "run" command of openDAQ-CI's reusable workflow, before Configure; the workflow's cmake-presets
 point FETCHCONTENT_SOURCE_DIR_<NAME> at the folders. Each commit is fetched alone (depth 1), as actions/checkout does,
 so every commit GitHub serves works: branches, tags, pull request heads and merge commits, also from forks. The command
@@ -62,14 +65,18 @@ def fetch(url, sha, folder):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     for _, repository, option in REPOSITORIES:
-        parser.add_argument(f"--{option}", required=True, metavar="SHA", help=f"full commit SHA of {repository}")
+        parser.add_argument(f"--{option}", metavar="SHA", help=f"full commit SHA of {repository} (not fetched when left out)")
     parser.add_argument("--dest", type=pathlib.Path, default=REPO_ROOT / "build" / "_src",
                         help="folder that gets one subfolder per repository (default: build/_src of this repository)")
     args = parser.parse_args()
 
+    wanted = [(name, repository, getattr(args, option.replace("-", "_")))
+              for name, repository, option in REPOSITORIES if getattr(args, option.replace("-", "_")) is not None]
+    if not wanted:
+        parser.error("give the commit of at least one repository: " + ", ".join(f"--{o}" for _, _, o in REPOSITORIES))
+
     server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
-    for name, repository, option in REPOSITORIES:
-        sha = getattr(args, option.replace("-", "_"))
+    for name, repository, sha in wanted:
         if not FULL_SHA.fullmatch(sha):
             annotate("error", f"{name}: no commit", f'"{sha}" is not a full 40-character commit SHA of {repository}')
             return 1

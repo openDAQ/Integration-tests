@@ -1,0 +1,167 @@
+name: Integration tests (prebuilt stagings)
+
+# Builds only the test apps, against core, OPC UA and LT streaming stagings pulled from ghcr, and runs them.
+# The stagings have to exist for the given commits and the triplet of the build job, the module stagings built
+# against the given core, and this repository needs read access to the packages.
+run-name: >-
+  ${{ format('Integration tests (prebuilt stagings, {0}) - core: {1} - LT: {2} - OPC UA: {3}',
+  inputs.channel, inputs.opendaq-revision, inputs.lt-streaming-modules-revision, inputs.opcua-modules-revision) }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      opendaq-revision:
+        description: openDAQ commit of the core staging (full 40-character SHA)
+        type: string
+        required: true
+      lt-streaming-modules-revision:
+        description: LTStreamingModulesModern commit of the LT staging (full 40-character SHA)
+        type: string
+        required: true
+      opcua-modules-revision:
+        description: OpcUaModules commit of the OPC UA staging (full 40-character SHA)
+        type: string
+        required: true
+      channel:
+        description: Staging channel, the ghcr path ghcr.io/opendaq/<channel>/staging/...
+        type: string
+        required: true
+        default: dev
+
+permissions:
+  contents: read
+
+env:
+  # The build job's triplet: the stagings have to be built with the same toolchain (ubuntu-22.04-x86_64-ninja-gcc-release)
+  TRIPLET: x86_64-linux-gcc-11-release
+
+jobs:
+  inputs:
+    name: Check inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      staging-artifacts: ${{ steps.request.outputs.staging-artifacts }}
+    steps:
+      # The commits are matched exactly against the stagings' annotations, and the LT one is fetched for its TLS
+      # fixtures: all three have to be full SHAs
+      - name: Build the staging request
+        id: request
+        shell: python3 {0}
+        env:
+          OPENDAQ: ${{ inputs.opendaq-revision }}
+          LT: ${{ inputs.lt-streaming-modules-revision }}
+          OPCUA: ${{ inputs.opcua-modules-revision }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          import json, os, re, sys
+
+          revisions = {"opendaq": os.environ["OPENDAQ"].strip(),
+                       "lt-streaming-modules": os.environ["LT"].strip(),
+                       "opcua-modules": os.environ["OPCUA"].strip()}
+          channel = os.environ["CHANNEL"].strip()
+
+          ok = True
+          for name, sha in revisions.items():
+              if not re.fullmatch(r"[0-9a-f]{40}", sha):
+                  print(f"::error title={name} revision::\"{sha}\" is not a full 40-character commit SHA")
+                  ok = False
+          if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", channel):
+              print(f"::error title=channel::\"{channel}\" is not a channel name")
+              ok = False
+          if not ok:
+              sys.exit(1)
+
+          triplet = os.environ["TRIPLET"]
+          def entry(name, depends_on_core):
+              annotations = {"org.opencontainers.image.revision": revisions[name],
+                             "com.opendaq.package.triplet": triplet}
+              if depends_on_core:
+                  annotations["com.opendaq.dependencies.opendaq.revision"] = revisions["opendaq"]
+              return {"artifact": f"dep-{name}",
+                      "packages": [{"path": f"ghcr.io/opendaq/{channel}/staging/{name}", "annotations": annotations}]}
+
+          request = [entry("opendaq", False), entry("opcua-modules", True), entry("lt-streaming-modules", True)]
+          print(json.dumps(request, indent=2))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"staging-artifacts={json.dumps(request)}\n")
+
+  # One artifact per staging: dep-opendaq, dep-opcua-modules, dep-lt-streaming-modules
+  pull:
+    name: Pull stagings
+    needs: inputs
+    permissions:
+      contents: read
+      packages: read
+    uses: openDAQ/openDAQ-CI/.github/workflows/staging-pull.yml@v4
+    with:
+      staging-artifacts: ${{ needs.inputs.outputs.staging-artifacts }}
+
+  # Builds the test apps against the stagings and runs them, in the job the stagings were built with (gcc 11 in an
+  # ubuntu:22.04 container). openDAQ-CI@v4 extracts every downloaded staging into every "dir" of the artifacts, so
+  # one dir: the core lands in prebuilt/opt/opendaq, the module plugins in prebuilt/lib/modules
+  build-and-test:
+    name: Build and test
+    needs: pull
+    uses: openDAQ/openDAQ-CI/.github/workflows/reusable.yml@v4
+    with:
+      include-jobs: '["ubuntu-22.04-x86_64-ninja-gcc-release"]'
+      # Not "dep-*": the artifacts this job uploads must not match the stagings' pattern
+      upload-pattern: 'prebuilt-*'
+      # The run command fetches LTStreamingModulesModern for its TLS fixtures. The apt packages are core's runtime
+      # dependencies (OpenSSL 3 for the LT plugins, X11/GL/udev/freetype for the reference function block module's
+      # renderer), as core's CI installs them
+      packages: >
+        [
+          {
+            "artifacts": [{"name": "dep-*", "dir": "prebuilt"}],
+            "run": "python3 .github/scripts/fetch_sources.py --lt-modules ${{ inputs.lt-streaming-modules-revision }}"
+          },
+          {
+            "match-jobs": ["ubuntu-*"],
+            "apt-install": ["libssl-dev", "libx11-dev", "libxi-dev", "libxcursor-dev", "libxrandr-dev", "libgl-dev", "libudev-dev", "libfreetype-dev"]
+          }
+        ]
+      cmake-presets: >
+        [
+          {
+            "configure-preset": "ci-prebuilt",
+            "test-preset": "ci-tests",
+            "build-targets": ["test_ref_modules", "test_device_modules", "test_device_modules_streaming"],
+            "cache-externals": true,
+            "cache-variables": {
+              "CMAKE_PREFIX_PATH": "${sourceDir}/prebuilt/opt/opendaq",
+              "OPENDAQ_INTEGRATION_TESTS_MODULE_DIRS": "${sourceDir}/prebuilt/lib/modules",
+              "FETCHCONTENT_SOURCE_DIR_LTSTREAMINGMODULESMODERN": "${sourceDir}/build/_src/LTStreamingModulesModern",
+              "LT_MODULES_REF": "${{ inputs.lt-streaming-modules-revision }}"
+            }
+          }
+        ]
+
+  # As in integration-tests.yml: the test results of each build-and-test job as annotations
+  report:
+    name: Report ${{ matrix.name }}
+    needs: build-and-test
+    if: ${{ !cancelled() && needs.build-and-test.outputs.matrix != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.build-and-test.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # A pattern rather than a name (prebuilt-test-results-<job>), so that a missing artifact is not an error
+      - name: Download the test results
+        uses: actions/download-artifact@v7
+        with:
+          pattern: ${{ matrix.gtest-artifact }}
+          path: test-results
+          merge-multiple: true
+
+      - name: Report the test results
+        env:
+          JOB: ${{ matrix.name }}
+        run: >
+          python3 .github/scripts/annotate_test_results.py --platform "$JOB"
+          --gtest-xml-dir test-results --ctest-junit test-results/ctest/ctest-junit.xml

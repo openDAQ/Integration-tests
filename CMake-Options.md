@@ -1,10 +1,11 @@
 # CMake Build System Options for the openDAQ Integration Tests
 
-This project builds openDAQ core, the OPC UA modules and the LT streaming modules from source and builds the integration tests against them.
+By default this project builds openDAQ core, the OPC UA modules and the LT streaming modules from source and builds the integration tests against them. With `OPENDAQ_INTEGRATION_TESTS_FROM=PREBUILT` it builds only the tests, against an installed core and installed modules ([Prebuilt core and modules](#prebuilt-core-and-modules)); the other sections are about the default mode.
 The following options might be used to customize the build passing them in the **configure step** like so: `-D<option_name>=<value>`.
 
 ## Table of contents:
 * [Source versions](#source-versions)
+* [Prebuilt core and modules](#prebuilt-core-and-modules)
 * [Project options](#project-options)
 * [Core and module options set by this project](#core-and-module-options-set-by-this-project)
 * [Core settings passed on to the tests](#core-settings-passed-on-to-the-tests)
@@ -19,6 +20,20 @@ The following options might be used to customize the build passing them in the *
 
 A branch is followed: every configure moves to its latest commit. The commits in use are printed during the configure step (`<repository> at <ref>: <commit>`).
 A value given with `-D` stays in the cache; remove it with `-U<option_name>` to go back to the ref file.
+
+## Prebuilt core and modules
+| Option Name | Type | Default Value | Description | Conditions, if any |
+|-|-|-|-|-|
+| `OPENDAQ_INTEGRATION_TESTS_FROM` | String | `SOURCES` | `SOURCES`: fetch and build core and the modules (all other sections). `PREBUILT`: use an installed core and installed modules, build only the tests | `PREBUILT` builds Release only (`CMAKE_BUILD_TYPE` or `CMAKE_CONFIGURATION_TYPES` = `Release`), without regression tests and coverage |
+| `CMAKE_PREFIX_PATH` | Path list | - | Where `find_package(openDAQ)` finds the core: an unpacked core staging (its root on Windows, `<staging>/opt/opendaq` on Linux and macOS), a bundle, or `cmake --install` of a `SOURCES` build | `PREBUILT`. The core needs `daq::opendaq_mocks` and `daq::opendaq_test_utils` |
+| `OPENDAQ_INTEGRATION_TESTS_MODULE_DIRS` | Path list | empty | More folders with module binaries, e.g. `bin/modules` (Windows) or `lib/modules` of the OPC UA and LT streaming stagings. The core's modules folder is always searched. The build copies the module binaries to `modules` next to the test apps, and the tests load them from there | `PREBUILT` |
+| `OPENDAQ_INTEGRATION_TESTS_RUNTIME_DIRS` | Path list | empty | Folders put on the library search path of the tests (`PATH`, `LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH`), e.g. the OpenSSL 3 `bin` folder the LT streaming modules need on Windows. On Windows the core's `bin` folder is added too | `PREBUILT` |
+| `OPENDAQ_INTEGRATION_TESTS_LT_TLS` | Bool | `ON` | Run the LT streaming tests over the TLS channel; the LT module binaries must be built with it (their default) | `PREBUILT`. In `SOURCES` mode it follows `DAQMODULES_LT_STREAMING_ENABLE_TLS` |
+| `LT_MODULES_REF` | String | - | The LTStreamingModulesModern commit the LT staging was built from: the TLS fixtures are taken from its sources (`FETCHCONTENT_SOURCE_DIR_LTSTREAMINGMODULESMODERN` points at a checkout instead) | `PREBUILT` with `OPENDAQ_INTEGRATION_TESTS_LT_TLS` |
+| `OPENDAQ_LOG_LEVEL_RELEASE` | String | `Info` | Compile time logging level; must match the core build | `PREBUILT` |
+| `OPENDAQ_ENABLE_UNSTABLE_TEST_LABELS`, `OPENDAQ_SKIP_UNSTABLE_TESTS`, `OPENDAQ_CI_RUNNER` | Bool | `ON` | As in [Core settings passed on to the tests](#core-settings-passed-on-to-the-tests), with the values of the `ci` preset as defaults | `PREBUILT` |
+
+In `PREBUILT` mode the tests are compiled with `OPENDAQ_ENABLE_NATIVE_STREAMING` and without `OPENDAQ_ENABLE_ERROR_GUARD`, `OPENDAQ_MIMALLOC_SUPPORT` and `OPENDAQ_ENABLE_OPTIONAL_TESTS`, as core's `stage` preset builds the core. Installed cores do not record these yet.
 
 ## Project options
 | Option Name | Type | Default Value | Description | Conditions, if any |

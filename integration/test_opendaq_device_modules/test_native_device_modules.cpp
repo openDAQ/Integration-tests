@@ -5,8 +5,6 @@
 #include <coreobjects/user_factory.h>
 #include <coretypes/filesystem.h>
 #include <coretypes/json_serializer_factory.h>
-#include <native_streaming_client_module/module_dll.h>
-#include <native_streaming_server_module/module_dll.h>
 #include <opendaq/client_type.h>
 #include <opendaq/component_exceptions.h>
 #include <opendaq/component_impl.h>
@@ -14,11 +12,7 @@
 #include <opendaq/discovery_server_factory.h>
 #include <opendaq/exceptions.h>
 #include <opendaq/module_impl.h>
-#include <ref_device_module/module_dll.h>
-#include <ref_fb_module/module_dll.h>
 #include <testutils/testutils.h>
-#include <websocket_streaming_client_module/module_dll.h>
-#include <websocket_streaming_server_module/module_dll.h>
 #include <chrono>
 #include <future>
 #include <iomanip>
@@ -47,7 +41,6 @@ static InstancePtr CreateCustomServerInstance(AuthenticationProviderPtr authenti
     auto instance = InstanceCustom(context, "serverLocal");
     {
         addNativeServerModule(instance);
-        addRefDeviceModule(instance);
         addRefDeviceModule(instance);
         addRefFBModule(instance);
 
@@ -80,7 +73,6 @@ static InstancePtr CreateCustomServerInstanceWithPermissions(AuthenticationProvi
     auto instance = InstanceCustom(context, "serverLocal");
     {
         addNativeServerModule(instance);
-        addRefDeviceModule(instance);
         addRefDeviceModule(instance);
         addRefFBModule(instance);
 
@@ -1898,16 +1890,8 @@ public:
         auto context = Context(scheduler, logger, typeManager, moduleManager, authenticationProvider, test_helpers::instanceOptions());
         auto instance = InstanceCustom(context, "client");
 
-        {
-            ModulePtr nativeClientModule;
-            createNativeStreamingClientModule(&nativeClientModule, context);
-
-            ModulePtr ltClientModule;
-            createWebsocketStreamingClientModule(&ltClientModule, instance.getContext());
-
-            moduleManager.addModule(nativeClientModule);
-            moduleManager.addModule(ltClientModule);
-        }
+        addNativeClientModule(instance);
+        addLtClientModule(instance);
 
         auto config = instance.createDefaultAddDeviceConfig();
         PropertyObjectPtr general = config.getPropertyValue("General");

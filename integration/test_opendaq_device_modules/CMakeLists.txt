@@ -31,36 +31,33 @@ function(add_device_modules_test_app APP)
         ${ARGN}
     )
 
+    # The modules are not linked: the tests load them from their binaries (integration_tests_use_modules())
     target_link_libraries(${APP} PRIVATE daq::test_utils
                                          daq::opendaq
-                                         daq::opcuatms_client
-                                         daq::native_stream_cl_module
                                          daq::opendaq_mocks
     )
 
-    # Should link only what you need $<BUILD_INTERFACE:Boost::asio>
-    target_link_libraries(${APP} PRIVATE $<BUILD_INTERFACE:Boost::asio>
-                                         $<BUILD_INTERFACE:std::filesystem>)
+    integration_tests_use_modules(${APP}
+        native_stream_srv_module
+        native_stream_cl_module
+        ws_stream_srv_module
+        ws_stream_cl_module
+        opcua_server_module
+        opcua_client_module
+        ref_device_module
+        ref_fb_module
+    )
 
-    if (MINGW)
+    # getaddrinfo in test_helpers.h
+    if (WIN32)
         target_link_libraries(${APP} PRIVATE ws2_32)
     endif()
 
-    target_link_libraries(${APP}
-        PRIVATE
-            daq::opcua_client_module
-            daq::opcua_server_module
-            daq::ref_fb_module
-            daq::ref_device_module
-            daq::ws_stream_cl_module
-            daq::ws_stream_srv_module
-            daq::native_stream_cl_module
-            daq::native_stream_srv_module
-    )
-
-    # Provides DAQMODULES_LT_STREAMING_ENABLE_TLS; the LT modules link it privately, so it does not reach
-    # the tests through them
-    target_link_libraries(${APP} PRIVATE daq::websocket_streaming)
+    # The secure channel tests of the LT streaming modules. The LT modules keep their own
+    # DAQMODULES_LT_STREAMING_ENABLE_TLS to themselves, so the tests get it from this project
+    if (OPENDAQ_INTEGRATION_TESTS_LT_TLS)
+        target_compile_definitions(${APP} PRIVATE DAQMODULES_LT_STREAMING_ENABLE_TLS)
+    endif()
 
     if (MSVC)
         target_compile_options(${APP} PRIVATE /bigobj)
@@ -69,6 +66,8 @@ function(add_device_modules_test_app APP)
     opendaq_target_pch(${APP} <opendaq/opendaq.h> <gtest/gtest.h>)
     opendaq_target_unity_tests(${APP} BATCH_SIZE 4)
 
+    # opendaq_mocks is a static library whose headers declare its factories PUBLIC_EXPORT: keep that from meaning
+    # __declspec(dllimport)
     target_compile_definitions(${APP} PRIVATE OPENDAQ_SKIP_DLL_IMPORT)
 
     set_target_properties(${APP} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY $<TARGET_FILE_DIR:${APP}>)
@@ -87,7 +86,7 @@ add_device_modules_test_app(${STREAMING_TEST_APP} ${STREAMING_TEST_SOURCES})
 # The LT streaming tests over the secure channel need TLS fixtures (CA, server and client
 # certificates/keys). Reuse the pre-generated ones from the LT streaming modules repository instead of
 # keeping a second copy here. Only needed when the LT modules are built with the secure channel.
-if (DAQMODULES_LT_STREAMING_ENABLE_TLS)
+if (OPENDAQ_INTEGRATION_TESTS_LT_TLS)
     set(LT_TLS_SECRETS_DIR "${LT_MODULES_SOURCE_DIR}/tests/integration/secrets")
     if (NOT EXISTS "${LT_TLS_SECRETS_DIR}")
         message(FATAL_ERROR "TLS fixtures not found in ${LT_TLS_SECRETS_DIR}. "
@@ -110,3 +109,5 @@ opendaq_test_resource_lock(${TEST_APP} network_native network_lt network_opcua m
 set_tests_properties(${TEST_APP} PROPERTIES PROCESSORS 2)
 
 opendaq_add_test_shards(${STREAMING_TEST_APP} ${STREAMING_TEST_SHARDS})
+
+integration_tests_apply_test_environment()

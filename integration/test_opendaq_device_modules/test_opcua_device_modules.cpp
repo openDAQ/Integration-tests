@@ -1,7 +1,5 @@
-#include <opcuatms/exceptions.h>
 #include <opendaq/logger_sink_ptr.h>
 #include <opendaq/logger_sink_last_message_private_ptr.h>
-#include <opcuashared/opcuaexception.h>
 #include "test_helpers/test_helpers.h"
 #include <coreobjects/authentication_provider_factory.h>
 #include <coreobjects/user_factory.h>
@@ -16,6 +14,26 @@
 using OpcuaDeviceModulesTest = testing::Test;
 
 using namespace daq;
+
+// The OPC UA client module reports calls it does not support with OPENDAQ_ERR_OPCUA_CLIENT_CALL_NOT_AVAILABLE
+// (OpcUaModules, opcuashared). The test apps do not register the OPC UA modules' exception types, so the error
+// arrives as a DaqException with this code.
+static constexpr ErrCode OPCUA_ERR_CLIENT_CALL_NOT_AVAILABLE = OPENDAQ_ERROR_CODE(0x09u, 0x003u);
+
+#define ASSERT_OPCUA_CALL_NOT_AVAILABLE(statement)                                              \
+    do                                                                                          \
+    {                                                                                           \
+        ErrCode opcuaCallErrCode = OPENDAQ_SUCCESS;                                             \
+        try                                                                                     \
+        {                                                                                       \
+            statement;                                                                          \
+        }                                                                                       \
+        catch (const DaqException& e)                                                           \
+        {                                                                                       \
+            opcuaCallErrCode = e.getErrCode();                                                  \
+        }                                                                                       \
+        ASSERT_EQ(opcuaCallErrCode, OPCUA_ERR_CLIENT_CALL_NOT_AVAILABLE) << #statement;         \
+    } while (false)
 
 namespace test_opcua_device_modules
 {
@@ -809,11 +827,10 @@ TEST_F(OpcuaDeviceModulesTest, DeviceDynamicFeatures)
 
     ASSERT_EQ(daqDevice.getAvailableDevices().getCount(), 0u);
     ASSERT_GT(daqDevice.getAvailableFunctionBlockTypes().getCount(), 0u);
-    ASSERT_THROW(daqDevice.addDevice("daqref://device0"),
-                 opcua::OpcUaClientCallNotAvailableException);  // Are these the correct errors to return?
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(daqDevice.addDevice("daqref://device0"));  // Are these the correct errors to return?
 
     auto refDevice = daqDevice.getDevices()[0];
-    ASSERT_THROW(daqDevice.removeDevice(refDevice), opcua::OpcUaClientCallNotAvailableException);
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(daqDevice.removeDevice(refDevice));
 
     auto refFb = daqDevice.getFunctionBlocks()[0];
     ASSERT_THROW(daqDevice.addFunctionBlock("test_fb"), daq::GeneralErrorException);
@@ -844,8 +861,8 @@ TEST_F(OpcuaDeviceModulesTest, DISABLED_Signal)
     // Those connections should not forward packets.
     ASSERT_EQ(signal.getConnections(), 0u);
 
-    ASSERT_THROW(signal.getDomainSignal(), opcua::OpcUaClientCallNotAvailableException);
-    ASSERT_THROW(signal.getRelatedSignals(), opcua::OpcUaClientCallNotAvailableException);
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(signal.getDomainSignal());
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(signal.getRelatedSignals());
 }
 
 TEST_F(OpcuaDeviceModulesTest, SignalConfig_Server)
@@ -879,17 +896,17 @@ TEST_F(OpcuaDeviceModulesTest, DISABLED_SignalConfig_Client)
 
     auto descCopy = DataDescriptorBuilderCopy(clientSignal.getDescriptor()).setName("test123").build();
 
-    // This currently fails. Should throw OpcUaClientCallNotAvailableException if we cannot fix it.
+    // This currently fails. Should fail with OPCUA_ERR_CLIENT_CALL_NOT_AVAILABLE if we cannot fix it.
     // causes UA_STATUSCODE_BADWRITENOTSUPPORTED: The server does not support writing the combination of value
     ASSERT_NO_THROW(clientSignal.setDescriptor(descCopy));
     ASSERT_TRUE(descCopy.isFrozen());
     ASSERT_EQ(descCopy.getName(), clientSignal.getDescriptor().getName());
 
-    ASSERT_THROW(clientSignal.setDomainSignal(clientSignals[3]), opcua::OpcUaClientCallNotAvailableException);
-    ASSERT_THROW(clientSignal.setRelatedSignals(List<ISignal>()), opcua::OpcUaClientCallNotAvailableException);
-    ASSERT_THROW(clientSignal.addRelatedSignal(Signal(nullptr, nullptr, "sig")), opcua::OpcUaClientCallNotAvailableException);
-    ASSERT_THROW(clientSignal.removeRelatedSignal(Signal(nullptr, nullptr, "sig")), opcua::OpcUaClientCallNotAvailableException);
-    ASSERT_THROW(clientSignal.clearRelatedSignals(), opcua::OpcUaClientCallNotAvailableException);
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(clientSignal.setDomainSignal(clientSignals[3]));
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(clientSignal.setRelatedSignals(List<ISignal>()));
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(clientSignal.addRelatedSignal(Signal(nullptr, nullptr, "sig")));
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(clientSignal.removeRelatedSignal(Signal(nullptr, nullptr, "sig")));
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(clientSignal.clearRelatedSignals());
 }
 
 TEST_F(OpcuaDeviceModulesTest, DISABLED_SignalLocalConnections)
@@ -976,9 +993,9 @@ TEST_F(OpcuaDeviceModulesTest, DISABLED_FunctionBlock)
     ASSERT_NO_THROW(fb.getStatusSignal());
 
     auto notifications = fb.asPtr<IInputPortNotifications>();
-    ASSERT_THROW(notifications.acceptsSignal(nullptr, nullptr), opcua::OpcUaClientCallNotAvailableException);
-    ASSERT_THROW(notifications.connected(nullptr), opcua::OpcUaClientCallNotAvailableException);
-    ASSERT_THROW(notifications.disconnected(nullptr), opcua::OpcUaClientCallNotAvailableException);
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(notifications.acceptsSignal(nullptr, nullptr));
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(notifications.connected(nullptr));
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(notifications.disconnected(nullptr));
 }
 
 TEST_F(OpcuaDeviceModulesTest, FunctionBlockProperties)
@@ -1025,17 +1042,17 @@ TEST_F(OpcuaDeviceModulesTest, DISABLED_InputPort)
     ASSERT_EQ(port.getLocalId(), serverPort.getLocalId());
     ASSERT_EQ(port.getRequiresSignal(), serverPort.getRequiresSignal());
 
-    ASSERT_THROW(port.acceptsSignal(nullptr), opcua::OpcUaClientCallNotAvailableException);
-    ASSERT_THROW(port.connect(nullptr), opcua::OpcUaClientCallNotAvailableException);
-    ASSERT_THROW(port.disconnect(), opcua::OpcUaClientCallNotAvailableException);
-    ASSERT_THROW(port.getSignal(), opcua::OpcUaClientCallNotAvailableException);
-    ASSERT_THROW(port.getConnection(), opcua::OpcUaClientCallNotAvailableException);
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(port.acceptsSignal(nullptr));
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(port.connect(nullptr));
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(port.disconnect());
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(port.getSignal());
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(port.getConnection());
 
     auto portConfig = port.asPtr<IInputPortConfig>();
-    ASSERT_THROW(portConfig.getCustomData(), opcua::OpcUaClientCallNotAvailableException);
-    ASSERT_THROW(portConfig.notifyPacketEnqueued(True), opcua::OpcUaClientCallNotAvailableException);
-    ASSERT_THROW(portConfig.setNotificationMethod(PacketReadyNotification::SameThread), opcua::OpcUaClientCallNotAvailableException);
-    ASSERT_THROW(portConfig.setCustomData(nullptr), opcua::OpcUaClientCallNotAvailableException);
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(portConfig.getCustomData());
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(portConfig.notifyPacketEnqueued(True));
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(portConfig.setNotificationMethod(PacketReadyNotification::SameThread));
+    ASSERT_OPCUA_CALL_NOT_AVAILABLE(portConfig.setCustomData(nullptr));
 }
 
 TEST_F(OpcuaDeviceModulesTest, DISABLED_PublicProp)

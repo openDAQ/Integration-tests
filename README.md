@@ -20,6 +20,8 @@ Branches are followed: every configure moves to their latest commit and prints t
 Core is built without its own tests and without its OPC UA and LT streaming options; this project adds those modules itself.
 See [CMake-Options.md](CMake-Options.md) for the options.
 
+The test apps do not link the modules: they load the module binaries and create the modules from them, the way core's module manager does. That is what lets them run against prebuilt core and modules as well (see [Building against prebuilt core and modules](#building-against-prebuilt-core-and-modules)).
+
 ## Requirements
 * CMake 3.25 or newer
 * Windows: Visual Studio 2022 or 2026. Linux: GCC or Clang, and Ninja
@@ -45,6 +47,7 @@ Use `msvc22-debug` for a Debug build and test run. Linux uses `gcc-release`, `gc
 * The tests open TCP ports 4840-4843 (OPC UA), 7414-7415 (LT streaming) and 7420-7422 (native), and use mDNS. The streaming shards use the same ports shifted by 1000 to 4000. Windows Firewall may ask for access the first time.
 * Tests that share ports or mDNS are locked against each other, so they can run in parallel: `ctest --preset msvc22-release -j 8`.
 * To run single tests, start a test app from the `bin` folder with `--gtest_filter=<pattern>`.
+* The test apps do not link the modules. Each test loads the modules it needs with core's module manager (`IModuleManager::loadModule`), from the module binaries the build points the test apps to: where the module targets are built, or, with prebuilt modules, the `modules` folder next to the test apps.
 
 ## Building against local clones
 To build against a local checkout instead of fetching a repository, pass its path at configure time:
@@ -53,6 +56,19 @@ To build against a local checkout instead of fetching a repository, pass its pat
 -DFETCHCONTENT_SOURCE_DIR_LTSTREAMINGMODULESMODERN=<path to LTStreamingModulesModern>
 -DFETCHCONTENT_SOURCE_DIR_OPCUAMODULES=<path to OpcUaModules>
 ```
+
+## Building against prebuilt core and modules
+With `-DOPENDAQ_INTEGRATION_TESTS_FROM=PREBUILT` nothing of core and the modules is fetched or built: the configure step finds an installed core with `find_package(openDAQ)` and only the three test apps are built. Release only. For example, with unpacked core, OPC UA and LT streaming stagings on Windows:
+```
+cmake --preset msvc22-prebuilt -DCMAKE_PREFIX_PATH=<core staging> -DOPENDAQ_INTEGRATION_TESTS_MODULE_DIRS="<OPC UA staging>/bin/modules;<LT staging>/bin/modules" -DOPENDAQ_INTEGRATION_TESTS_RUNTIME_DIRS="C:/Program Files/OpenSSL-Win64/bin" -DLT_MODULES_REF=<commit of the LT staging>
+cmake --build --preset msvc22-prebuilt
+ctest --preset msvc22-prebuilt
+```
+* The core has to come with its test utilities and mocks (built with `OPENDAQ_ENABLE_TEST_UTILS`); `cmake --install` of a build of this project's default mode also works as the core prefix.
+* The configure step checks that every module the tests use is found exactly once, in the core's modules folder or in `OPENDAQ_INTEGRATION_TESTS_MODULE_DIRS`. The build copies them to the `modules` folder next to the test apps, and the tests load them from there.
+* The LT streaming TLS fixtures come from the LTStreamingModulesModern sources at `LT_MODULES_REF`.
+* The workflow `integration-tests-prebuilt.yml` does the same in GitHub Actions, with stagings pulled from ghcr.
+* See [CMake-Options.md](CMake-Options.md#prebuilt-core-and-modules) for all the options.
 
 ## Regression tests
 The protocol level regression tests in `regression/` are not part of this build. They are made for GitHub Actions, use Linux-only link options, and are enabled with `-DOPENDAQ_ENABLE_REGRESSION_TESTS=ON`.
