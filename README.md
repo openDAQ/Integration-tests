@@ -67,7 +67,7 @@ ctest --preset msvc22-prebuilt
 * The core has to come with its test utilities and mocks (built with `OPENDAQ_ENABLE_TEST_UTILS`); `cmake --install` of a build of this project's default mode also works as the core prefix.
 * The configure step checks that every module the tests use is found exactly once, in the core's modules folder or in `OPENDAQ_INTEGRATION_TESTS_MODULE_DIRS`. The build copies them to the `modules` folder next to the test apps, and the tests load them from there.
 * The LT streaming TLS fixtures come from the LTStreamingModulesModern sources at `LT_MODULES_REF`.
-* The workflow `integration-tests-prebuilt.yml` does the same in GitHub Actions, with stagings pulled from ghcr.
+* The workflow `integration-tests-prebuilt.yml` does the same in GitHub Actions. Started by hand, it pulls the stagings from ghcr. Called by another workflow (`workflow_call`), it takes them from ghcr or from the artifacts of the caller's run (input `staging-source`); its header lists what a caller has to provide.
 * See [CMake-Options.md](CMake-Options.md#prebuilt-core-and-modules) for all the options.
 
 ## Regression tests

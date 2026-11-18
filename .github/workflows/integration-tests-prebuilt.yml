@@ -1,13 +1,66 @@
 name: Integration tests (prebuilt stagings)
 
-# Builds only the test apps, against core, OPC UA and LT streaming stagings pulled from ghcr, and runs them.
-# The stagings have to exist for the given commits and the triplet of the build job, the module stagings built
-# against the given core, and this repository needs read access to the packages.
+# Builds only the test apps, against core, OPC UA and LT streaming stagings, and runs them. The stagings come from
+# ghcr (staging-source "ghcr", pulled by staging-pull.yml) or are artifacts of this run (staging-source "run"). They
+# have to be built from the given commits for the triplet of the build job (BUILD_JOB, TRIPLET below), the module
+# stagings against the given core.
+#
+# Started by hand (workflow_dispatch, ghcr only) or called by another workflow (workflow_call), e.g. openDAQ-CI's
+# bundle workflow, with the same inputs plus staging-source. A caller:
+#   - grants the calling job "contents: read" and "packages: read", with either source: GitHub checks the
+#     permissions of every called job when the run starts, also of the pull job that run mode skips;
+#   - for ghcr, gives the packages' read access to its own repository: a called workflow's GITHUB_TOKEN is the
+#     caller's;
+#   - for run, uploads the artifacts <component>-staging-<BUILD_JOB> for opendaq, opcua-modules and
+#     lt-streaming-modules before the call, each with one .tar.gz and its staging-meta.json (openDAQ-CI's staging
+#     artifacts with upload-pattern "<component>-*"). The commits may then be left out: the run-stagings job takes
+#     them from the stagings, and checks the stagings against the commits that are given;
+#   - calls it once per run (the artifact names below are fixed); concurrency is the caller's, and run-name is the
+#     caller's.
+# Known limitation: openDAQ-CI's reusable.yml@v4 checks out the repository of the run, so build-and-test works only
+# in runs of this repository until reusable.yml takes the repository and ref to build (see build-and-test).
 run-name: >-
   ${{ format('Integration tests (prebuilt stagings, {0}) - core: {1} - LT: {2} - OPC UA: {3}',
   inputs.channel, inputs.opendaq-revision, inputs.lt-streaming-modules-revision, inputs.opcua-modules-revision) }}
 
 on:
+  # The three commits are required with ghcr, which pulls the stagings by them (checked by the inputs job: an input
+  # cannot be required for one source only). With run they may be empty: they are then taken from the stagings
+  workflow_call:
+    inputs:
+      opendaq-revision:
+        description: openDAQ commit of the core staging (full 40-character SHA; with run, empty = from the stagings)
+        type: string
+        required: false
+        default: ''
+      lt-streaming-modules-revision:
+        description: >-
+          LTStreamingModulesModern commit of the LT staging (full 40-character SHA; with run, empty = from the
+          stagings)
+        type: string
+        required: false
+        default: ''
+      opcua-modules-revision:
+        description: OpcUaModules commit of the OPC UA staging (full 40-character SHA; with run, empty = from the stagings)
+        type: string
+        required: false
+        default: ''
+      staging-source:
+        description: >-
+          Where the stagings come from: ghcr (pulled by commit and triplet) or run (the caller's artifacts
+          <component>-staging-<job> in this run)
+        type: string
+        required: false
+        default: ghcr
+      channel:
+        description: Staging channel, the ghcr path ghcr.io/opendaq/<channel>/staging/... (ghcr only)
+        type: string
+        required: false
+        default: dev
+    outputs:
+      matrix:
+        description: The build-and-test jobs (openDAQ-CI's matrix), with the name of each job's test results artifact
+        value: ${{ jobs.build-and-test.outputs.matrix }}
   workflow_dispatch:
     inputs:
       opendaq-revision:
@@ -32,7 +85,8 @@ permissions:
   contents: read
 
 env:
-  # The build job's triplet: the stagings have to be built with the same toolchain (ubuntu-22.04-x86_64-ninja-gcc-release)
+  # The build job (openDAQ-CI's catalog) and its triplet: the stagings have to be built with the same toolchain
+  BUILD_JOB: ubuntu-22.04-x86_64-ninja-gcc-release
   TRIPLET: x86_64-linux-gcc-11-release
 
 jobs:
@@ -41,14 +95,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
+      source: ${{ steps.request.outputs.source }}
+      include-jobs: ${{ steps.request.outputs.include-jobs }}
+      # ghcr: the request for the pull job
       staging-artifacts: ${{ steps.request.outputs.staging-artifacts }}
+      # run: a download-artifact pattern for the three staging artifacts of this run
+      run-artifacts: ${{ steps.request.outputs.run-artifacts }}
+      # For build-and-test: the staging artifacts to download and extract
+      consume-artifacts: ${{ steps.request.outputs.consume-artifacts }}
+      # This workflow's repository and commit, also when called from another repository: for build-and-test's
+      # checkout once reusable.yml takes them ("with" cannot read the job context)
+      workflow-repository: ${{ job.workflow_repository }}
+      workflow-sha: ${{ job.workflow_sha }}
     steps:
-      # The commits are matched exactly against the stagings' annotations, and the LT one is fetched for its TLS
-      # fixtures: all three have to be full SHAs
+      # The commits are matched against the stagings' annotations or staging-meta.json, and the LT one is fetched for
+      # its TLS fixtures: each has to be a full SHA, and with ghcr all three are needed. A manual run has no
+      # staging-source input: ghcr
       - name: Build the staging request
         id: request
         shell: python3 {0}
         env:
+          SOURCE: ${{ inputs.staging-source || 'ghcr' }}
           OPENDAQ: ${{ inputs.opendaq-revision }}
           LT: ${{ inputs.lt-streaming-modules-revision }}
           OPCUA: ${{ inputs.opcua-modules-revision }}
@@ -56,40 +123,62 @@ jobs:
         run: |
           import json, os, re, sys
 
+          source = os.environ["SOURCE"].strip()
           revisions = {"opendaq": os.environ["OPENDAQ"].strip(),
                        "lt-streaming-modules": os.environ["LT"].strip(),
                        "opcua-modules": os.environ["OPCUA"].strip()}
           channel = os.environ["CHANNEL"].strip()
 
           ok = True
+          if source not in ("ghcr", "run"):
+              print(f"::error title=staging-source::\"{source}\" is neither ghcr nor run")
+              ok = False
           for name, sha in revisions.items():
-              if not re.fullmatch(r"[0-9a-f]{40}", sha):
+              if source == "run" and not sha:
+                  print(f"{name}: taken from the stagings")
+              elif not re.fullmatch(r"[0-9a-f]{40}", sha):
                   print(f"::error title={name} revision::\"{sha}\" is not a full 40-character commit SHA")
                   ok = False
-          if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", channel):
+          if source == "ghcr" and not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", channel):
               print(f"::error title=channel::\"{channel}\" is not a channel name")
               ok = False
           if not ok:
               sys.exit(1)
 
+          job = os.environ["BUILD_JOB"]
           triplet = os.environ["TRIPLET"]
-          def entry(name, depends_on_core):
-              annotations = {"org.opencontainers.image.revision": revisions[name],
-                             "com.opendaq.package.triplet": triplet}
-              if depends_on_core:
-                  annotations["com.opendaq.dependencies.opendaq.revision"] = revisions["opendaq"]
-              return {"artifact": f"dep-{name}",
-                      "packages": [{"path": f"ghcr.io/opendaq/{channel}/staging/{name}", "annotations": annotations}]}
+          outputs = {"source": source, "include-jobs": json.dumps([job])}
+          if source == "ghcr":
+              def entry(name, depends_on_core):
+                  annotations = {"org.opencontainers.image.revision": revisions[name],
+                                 "com.opendaq.package.triplet": triplet}
+                  if depends_on_core:
+                      annotations["com.opendaq.dependencies.opendaq.revision"] = revisions["opendaq"]
+                  return {"artifact": f"integration-tests-dep-{name}",
+                          "packages": [{"path": f"ghcr.io/opendaq/{channel}/staging/{name}",
+                                        "annotations": annotations}]}
 
-          request = [entry("opendaq", False), entry("opcua-modules", True), entry("lt-streaming-modules", True)]
-          print(json.dumps(request, indent=2))
+              request = [entry("opendaq", False), entry("opcua-modules", True), entry("lt-streaming-modules", True)]
+              print("Stagings to pull from ghcr:")
+              print(json.dumps(request, indent=2))
+              outputs["staging-artifacts"] = json.dumps(request)
+              consume = "integration-tests-dep-*"
+          else:
+              names = [f"{name}-staging-{job}" for name in revisions]
+              print("Staging artifacts expected in this run:", *names, sep="\n  ")
+              consume = outputs["run-artifacts"] = "{" + ",".join(names) + "}"
+          outputs["consume-artifacts"] = json.dumps([{"name": consume, "dir": "prebuilt"}])
+
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(f"staging-artifacts={json.dumps(request)}\n")
+              for key, value in outputs.items():
+                  f.write(f"{key}={value}\n")
 
-  # One artifact per staging: dep-opendaq, dep-opcua-modules, dep-lt-streaming-modules
+  # ghcr: one artifact per staging, integration-tests-dep-opendaq, -opcua-modules, -lt-streaming-modules. The prefix
+  # keeps them apart from a caller's own artifacts in the same run
   pull:
     name: Pull stagings
     needs: inputs
+    if: needs.inputs.outputs.source == 'ghcr'
     permissions:
       contents: read
       packages: read
@@ -97,25 +186,74 @@ jobs:
     with:
       staging-artifacts: ${{ needs.inputs.outputs.staging-artifacts }}
 
+  # run: the caller's staging artifacts in this run. Checked as the pull job matches the ghcr annotations: triplet,
+  # modules built against the run's core, and the given commits. The commits left empty are taken from the stagings
+  # and given as outputs (full SHAs). reusable.yml@v4 only warns when a staging artifact is missing, so the run stops
+  # here instead.
+  run-stagings:
+    name: Check the run's stagings
+    needs: inputs
+    if: needs.inputs.outputs.source == 'run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      opendaq-revision: ${{ steps.check.outputs.opendaq-revision }}
+      opcua-modules-revision: ${{ steps.check.outputs.opcua-modules-revision }}
+      lt-streaming-modules-revision: ${{ steps.check.outputs.lt-streaming-modules-revision }}
+    steps:
+      # This repository at this workflow's commit, for the check script
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+
+      # Each artifact into its own folder stagings/<artifact>; one that is missing is reported by the check
+      - name: Download the stagings
+        uses: actions/download-artifact@v7
+        with:
+          pattern: ${{ needs.inputs.outputs.run-artifacts }}
+          path: stagings
+
+      # A module's commit that is not given is looked up from its short form in staging-meta.json (GitHub API)
+      - name: Check the stagings
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          OPENDAQ: ${{ inputs.opendaq-revision }}
+          LT: ${{ inputs.lt-streaming-modules-revision }}
+          OPCUA: ${{ inputs.opcua-modules-revision }}
+        run: >
+          python3 .github/scripts/check_run_stagings.py --dir stagings --job "$BUILD_JOB" --triplet "$TRIPLET"
+          --revision "opendaq=$OPENDAQ" --revision "opcua-modules=$OPCUA" --revision "lt-streaming-modules=$LT"
+
   # Builds the test apps against the stagings and runs them, in the job the stagings were built with (gcc 11 in an
   # ubuntu:22.04 container). openDAQ-CI@v4 extracts every downloaded staging into every "dir" of the artifacts, so
-  # one dir: the core lands in prebuilt/opt/opendaq, the module plugins in prebuilt/lib/modules
+  # one dir: the core lands in prebuilt/opt/opendaq, the module plugins in prebuilt/lib/modules.
+  # reusable.yml@v4 checks out the repository of the run, which is the caller's when this workflow is called from
+  # another repository; then the run command and the presets are not found. A later openDAQ-CI version takes
+  # "repository: needs.inputs.outputs.workflow-repository" and "ref: needs.inputs.outputs.workflow-sha" here.
   build-and-test:
     name: Build and test
-    needs: pull
+    needs: [inputs, pull, run-stagings]
+    # One of pull and run-stagings runs and the other is skipped, so the default condition (all succeeded) would skip
+    # this job
+    if: >-
+      ${{ !cancelled() && needs.inputs.result == 'success'
+      && (needs.pull.result == 'success' || needs.run-stagings.result == 'success') }}
     uses: openDAQ/openDAQ-CI/.github/workflows/reusable.yml@v4
     with:
-      include-jobs: '["ubuntu-22.04-x86_64-ninja-gcc-release"]'
-      # Not "dep-*": the artifacts this job uploads must not match the stagings' pattern
-      upload-pattern: 'prebuilt-*'
-      # The run command fetches LTStreamingModulesModern for its TLS fixtures. The apt packages are core's runtime
-      # dependencies (OpenSSL 3 for the LT plugins, X11/GL/udev/freetype for the reference function block module's
-      # renderer), as core's CI installs them
+      include-jobs: ${{ needs.inputs.outputs.include-jobs }}
+      # integration-tests-test-results-<job>, which matches neither integration-tests-dep-* nor <component>-staging-*
+      upload-pattern: 'integration-tests-*'
+      # The run command fetches LTStreamingModulesModern for its TLS fixtures, at the LT commit: run-stagings' output
+      # with run (given or taken from the stagings), the input with ghcr (run-stagings skipped, its output empty).
+      # The apt packages are core's runtime dependencies (OpenSSL 3 for the LT plugins, X11/GL/udev/freetype for the
+      # reference function block module's renderer), as core's CI installs them
       packages: >
         [
           {
-            "artifacts": [{"name": "dep-*", "dir": "prebuilt"}],
-            "run": "python3 .github/scripts/fetch_sources.py --lt-modules ${{ inputs.lt-streaming-modules-revision }}"
+            "artifacts": ${{ needs.inputs.outputs.consume-artifacts }},
+            "run": "python3 .github/scripts/fetch_sources.py --lt-modules ${{ needs.run-stagings.outputs.lt-streaming-modules-revision || inputs.lt-streaming-modules-revision }}"
           },
           {
             "match-jobs": ["ubuntu-*"],
@@ -133,7 +271,7 @@ jobs:
               "CMAKE_PREFIX_PATH": "${sourceDir}/prebuilt/opt/opendaq",
               "OPENDAQ_INTEGRATION_TESTS_MODULE_DIRS": "${sourceDir}/prebuilt/lib/modules",
               "FETCHCONTENT_SOURCE_DIR_LTSTREAMINGMODULESMODERN": "${sourceDir}/build/_src/LTStreamingModulesModern",
-              "LT_MODULES_REF": "${{ inputs.lt-streaming-modules-revision }}"
+              "LT_MODULES_REF": "${{ needs.run-stagings.outputs.lt-streaming-modules-revision || inputs.lt-streaming-modules-revision }}"
             }
           }
         ]
@@ -149,9 +287,14 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.build-and-test.outputs.matrix) }}
     steps:
+      # This repository at this workflow's commit, also when called from another repository (the default is the
+      # repository of the run)
       - uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
 
-      # A pattern rather than a name (prebuilt-test-results-<job>), so that a missing artifact is not an error
+      # A pattern rather than a name (integration-tests-test-results-<job>), so that a missing artifact is not an error
       - name: Download the test results
         uses: actions/download-artifact@v7
         with:
