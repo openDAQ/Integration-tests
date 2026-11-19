@@ -1,9 +1,11 @@
 """Checks the stagings that the caller of integration-tests-prebuilt.yml uploaded to the run (staging-source "run"),
 and gives their full commits.
 
-The artifacts are downloaded with actions/download-artifact by pattern, so each one is a folder named after it:
-<dir>/<component>-staging-<job>/ with one .tar.gz and its staging-meta.json. Each staging has to:
-- be there, with exactly one tarball;
+The artifacts are downloaded with actions/download-artifact by pattern, so each one is a folder named after it,
+<dir>/<component>-staging-<job>/. openDAQ-CI's stage puts a staging into a subfolder named after it
+(<staging>/: core, opcua, lt-streaming) with one .tar.gz and its staging-meta.json; any depth is taken, the
+artifact's root too. Each staging has to:
+- be there, with exactly one staging-meta.json and exactly one tarball, beside each other;
 - name its component and the build job's triplet in staging-meta.json;
 - for a module, be built against the core of the run: dependencies.opendaq.revision is that core's full commit.
 
@@ -52,19 +54,25 @@ def read(folder, component, triplet):
     if not folder.is_dir():
         return None, [f"the artifact {folder.name} is not in this run"]
 
+    def listed(paths):
+        return ", ".join(path.relative_to(folder).as_posix() for path in paths) or "none"
+
     problems = []
-    tarballs = sorted(path.name for path in folder.glob("*.tar.gz"))
+    tarballs = sorted(folder.rglob("*.tar.gz"))
+    metas = sorted(folder.rglob("staging-meta.json"))
     if len(tarballs) != 1:
-        problems.append(f"{len(tarballs)} .tar.gz files instead of one: {', '.join(tarballs) or 'none'}")
+        problems.append(f"{len(tarballs)} .tar.gz files instead of one: {listed(tarballs)}")
+    if len(metas) != 1:
+        return None, problems + [f"{len(metas)} staging-meta.json files instead of one: {listed(metas)}"]
+    if len(tarballs) == 1 and tarballs[0].parent != metas[0].parent:
+        problems.append(f"the tarball {listed(tarballs)} is not beside {listed(metas)}")
 
     try:
-        meta = json.loads((folder / "staging-meta.json").read_text(encoding="utf-8"))
+        meta = json.loads(metas[0].read_text(encoding="utf-8"))
         if not isinstance(meta.get("package"), dict):
             raise TypeError("no package object")
-    except FileNotFoundError:
-        return None, problems + ["no staging-meta.json"]
-    except (ValueError, TypeError, AttributeError) as e:
-        return None, problems + [f"staging-meta.json cannot be read: {e!r}"]
+    except (OSError, ValueError, TypeError, AttributeError) as e:
+        return None, problems + [f"{listed(metas)} cannot be read: {e!r}"]
 
     package = meta["package"]
     if package.get("name") != component:

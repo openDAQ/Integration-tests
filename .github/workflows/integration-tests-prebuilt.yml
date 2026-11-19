@@ -13,8 +13,9 @@ name: Integration tests (prebuilt stagings)
 #   - for ghcr, gives the packages' read access to its own repository: a called workflow's GITHUB_TOKEN is the
 #     caller's;
 #   - for run, uploads the artifacts <component>-staging-<BUILD_JOB> for opendaq, opcua-modules and
-#     lt-streaming-modules before the call, each with one .tar.gz and its staging-meta.json (openDAQ-CI's staging
-#     artifacts with upload-pattern "<component>-*"). The commits may then be left out: the run-stagings job takes
+#     lt-streaming-modules before the call, each with one .tar.gz and its staging-meta.json side by side, at any depth
+#     (openDAQ-CI's staging artifacts with upload-pattern "<component>-*", which hold them in a subfolder named after
+#     the staging: core/, opcua/, lt-streaming/). The commits may then be left out: the run-stagings job takes
 #     them from the stagings, and checks the stagings against the commits that are given;
 #   - calls it once per run (the artifact names below are fixed); concurrency is the caller's, and run-name is the
 #     caller's.
