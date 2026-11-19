@@ -1,12 +1,13 @@
 name: Integration tests (prebuilt stagings)
 
 # Builds only the test apps, against core, OPC UA and LT streaming stagings, and runs them. The stagings come from
-# ghcr (staging-source "ghcr", pulled by staging-pull.yml) or are artifacts of this run (staging-source "run"). They
-# have to be built from the given commits for the triplet of the build job (BUILD_JOB, TRIPLET below), the module
-# stagings against the given core.
+# ghcr (staging-source "ghcr": ghcr.io/opendaq/staging/<component>, pulled by staging-pull.yml) or are artifacts of
+# this run (staging-source "run"). They have to be built from the given commits for the triplet of the build job
+# (BUILD_JOB, TRIPLET below), the module stagings against the given core.
 #
 # Started by hand (workflow_dispatch, ghcr only) or called by another workflow (workflow_call), e.g. openDAQ-CI's
-# bundle workflow, with the same inputs plus staging-source. A caller:
+# integration-tests.yml, with the same inputs plus staging-source. Every job that needs this repository checks it
+# out at this workflow's commit, so the workflow works in the runs of other repositories too. A caller:
 #   - grants the calling job "contents: read" and "packages: read", with either source: GitHub checks the
 #     permissions of every called job when the run starts, also of the pull job that run mode skips;
 #   - for ghcr, gives the packages' read access to its own repository: a called workflow's GITHUB_TOKEN is the
@@ -17,11 +18,9 @@ name: Integration tests (prebuilt stagings)
 #     them from the stagings, and checks the stagings against the commits that are given;
 #   - calls it once per run (the artifact names below are fixed); concurrency is the caller's, and run-name is the
 #     caller's.
-# Known limitation: openDAQ-CI's reusable.yml@v4 checks out the repository of the run, so build-and-test works only
-# in runs of this repository until reusable.yml takes the repository and ref to build (see build-and-test).
 run-name: >-
-  ${{ format('Integration tests (prebuilt stagings, {0}) - core: {1} - LT: {2} - OPC UA: {3}',
-  inputs.channel, inputs.opendaq-revision, inputs.lt-streaming-modules-revision, inputs.opcua-modules-revision) }}
+  ${{ format('Integration tests (prebuilt stagings) - core: {0} - LT: {1} - OPC UA: {2}',
+  inputs.opendaq-revision, inputs.lt-streaming-modules-revision, inputs.opcua-modules-revision) }}
 
 on:
   # The three commits are required with ghcr, which pulls the stagings by them (checked by the inputs job: an input
@@ -52,11 +51,6 @@ on:
         type: string
         required: false
         default: ghcr
-      channel:
-        description: Staging channel, the ghcr path ghcr.io/opendaq/<channel>/staging/... (ghcr only)
-        type: string
-        required: false
-        default: dev
     outputs:
       matrix:
         description: The build-and-test jobs (openDAQ-CI's matrix), with the name of each job's test results artifact
@@ -75,11 +69,6 @@ on:
         description: OpcUaModules commit of the OPC UA staging (full 40-character SHA)
         type: string
         required: true
-      channel:
-        description: Staging channel, the ghcr path ghcr.io/opendaq/<channel>/staging/...
-        type: string
-        required: true
-        default: dev
 
 permissions:
   contents: read
@@ -101,10 +90,10 @@ jobs:
       staging-artifacts: ${{ steps.request.outputs.staging-artifacts }}
       # run: a download-artifact pattern for the three staging artifacts of this run
       run-artifacts: ${{ steps.request.outputs.run-artifacts }}
-      # For build-and-test: the staging artifacts to download and extract
+      # For build-and-test: one entry per staging artifact, each extracted into prebuilt
       consume-artifacts: ${{ steps.request.outputs.consume-artifacts }}
       # This workflow's repository and commit, also when called from another repository: for build-and-test's
-      # checkout once reusable.yml takes them ("with" cannot read the job context)
+      # checkout ("with" of a called workflow cannot read the job context)
       workflow-repository: ${{ job.workflow_repository }}
       workflow-sha: ${{ job.workflow_sha }}
     steps:
@@ -119,7 +108,6 @@ jobs:
           OPENDAQ: ${{ inputs.opendaq-revision }}
           LT: ${{ inputs.lt-streaming-modules-revision }}
           OPCUA: ${{ inputs.opcua-modules-revision }}
-          CHANNEL: ${{ inputs.channel }}
         run: |
           import json, os, re, sys
 
@@ -127,7 +115,6 @@ jobs:
           revisions = {"opendaq": os.environ["OPENDAQ"].strip(),
                        "lt-streaming-modules": os.environ["LT"].strip(),
                        "opcua-modules": os.environ["OPCUA"].strip()}
-          channel = os.environ["CHANNEL"].strip()
 
           ok = True
           if source not in ("ghcr", "run"):
@@ -139,9 +126,6 @@ jobs:
               elif not re.fullmatch(r"[0-9a-f]{40}", sha):
                   print(f"::error title={name} revision::\"{sha}\" is not a full 40-character commit SHA")
                   ok = False
-          if source == "ghcr" and not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", channel):
-              print(f"::error title=channel::\"{channel}\" is not a channel name")
-              ok = False
           if not ok:
               sys.exit(1)
 
@@ -155,19 +139,20 @@ jobs:
                   if depends_on_core:
                       annotations["com.opendaq.dependencies.opendaq.revision"] = revisions["opendaq"]
                   return {"artifact": f"integration-tests-dep-{name}",
-                          "packages": [{"path": f"ghcr.io/opendaq/{channel}/staging/{name}",
-                                        "annotations": annotations}]}
+                          "packages": [{"path": f"ghcr.io/opendaq/staging/{name}", "annotations": annotations}]}
 
               request = [entry("opendaq", False), entry("opcua-modules", True), entry("lt-streaming-modules", True)]
               print("Stagings to pull from ghcr:")
               print(json.dumps(request, indent=2))
               outputs["staging-artifacts"] = json.dumps(request)
-              consume = "integration-tests-dep-*"
+              names = [item["artifact"] for item in request]
           else:
               names = [f"{name}-staging-{job}" for name in revisions]
               print("Staging artifacts expected in this run:", *names, sep="\n  ")
-              consume = outputs["run-artifacts"] = "{" + ",".join(names) + "}"
-          outputs["consume-artifacts"] = json.dumps([{"name": consume, "dir": "prebuilt"}])
+              outputs["run-artifacts"] = "{" + ",".join(names) + "}"
+          # One entry per artifact, by its exact name: reusable.yml matches each downloaded artifact to its entry with
+          # fnmatch, which knows no {a,b} pattern. All three go into one dir, as the presets of build-and-test expect
+          outputs["consume-artifacts"] = json.dumps([{"name": name, "dir": "prebuilt"} for name in names])
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               for key, value in outputs.items():
@@ -182,13 +167,13 @@ jobs:
     permissions:
       contents: read
       packages: read
-    uses: openDAQ/openDAQ-CI/.github/workflows/staging-pull.yml@v4
+    uses: openDAQ/openDAQ-CI/.github/workflows/staging-pull.yml@v4.1.0
     with:
       staging-artifacts: ${{ needs.inputs.outputs.staging-artifacts }}
 
   # run: the caller's staging artifacts in this run. Checked as the pull job matches the ghcr annotations: triplet,
   # modules built against the run's core, and the given commits. The commits left empty are taken from the stagings
-  # and given as outputs (full SHAs). reusable.yml@v4 only warns when a staging artifact is missing, so the run stops
+  # and given as outputs (full SHAs). reusable.yml only warns when a staging artifact is missing, so the run stops
   # here instead.
   run-stagings:
     name: Check the run's stagings
@@ -227,11 +212,10 @@ jobs:
           --revision "opendaq=$OPENDAQ" --revision "opcua-modules=$OPCUA" --revision "lt-streaming-modules=$LT"
 
   # Builds the test apps against the stagings and runs them, in the job the stagings were built with (gcc 11 in an
-  # ubuntu:22.04 container). openDAQ-CI@v4 extracts every downloaded staging into every "dir" of the artifacts, so
-  # one dir: the core lands in prebuilt/opt/opendaq, the module plugins in prebuilt/lib/modules.
-  # reusable.yml@v4 checks out the repository of the run, which is the caller's when this workflow is called from
-  # another repository; then the run command and the presets are not found. A later openDAQ-CI version takes
-  # "repository: needs.inputs.outputs.workflow-repository" and "ref: needs.inputs.outputs.workflow-sha" here.
+  # ubuntu:22.04 container). Each staging artifact is extracted into its entry's dir, all of them prebuilt: the core
+  # lands in prebuilt/opt/opendaq, the module plugins in prebuilt/lib/modules.
+  # reusable.yml checks out the repository and ref given: this repository at this workflow's commit, also when the
+  # run is another repository's (its default is the repository of the run).
   build-and-test:
     name: Build and test
     needs: [inputs, pull, run-stagings]
@@ -240,8 +224,10 @@ jobs:
     if: >-
       ${{ !cancelled() && needs.inputs.result == 'success'
       && (needs.pull.result == 'success' || needs.run-stagings.result == 'success') }}
-    uses: openDAQ/openDAQ-CI/.github/workflows/reusable.yml@v4
+    uses: openDAQ/openDAQ-CI/.github/workflows/reusable.yml@v4.1.0
     with:
+      repository: ${{ needs.inputs.outputs.workflow-repository }}
+      ref: ${{ needs.inputs.outputs.workflow-sha }}
       include-jobs: ${{ needs.inputs.outputs.include-jobs }}
       # integration-tests-test-results-<job>, which matches neither integration-tests-dep-* nor <component>-staging-*
       upload-pattern: 'integration-tests-*'
