@@ -53,6 +53,27 @@ if (INTEGRATION_TESTS_MISSING_TARGETS)
                         "branch has both)")
 endif()
 
+# config_protocol: the tests use only GetLatestConfigProtocolVersion(), an inline constexpr of its header. Cores that do
+# not install the library (none does yet) get its headers from core's sources at the staged commit, which build against
+# the installed core headers alone. Drop this once every supported core installs config_protocol.
+set(OPENDAQ_INTEGRATION_TESTS_CONFIG_PROTOCOL_INCLUDE_DIR "" CACHE PATH
+    "Core's shared/libraries/config_protocol/include at the staged core commit, for a core that does not install config_protocol")
+if (NOT TARGET daq::config_protocol)
+    if (NOT EXISTS "${OPENDAQ_INTEGRATION_TESTS_CONFIG_PROTOCOL_INCLUDE_DIR}/config_protocol/config_protocol.h")
+        message(FATAL_ERROR "The ${OPENDAQ_SDK_NAME} package in ${${OPENDAQ_SDK_NAME}_DIR} has no daq::config_protocol. Set "
+                            "OPENDAQ_INTEGRATION_TESTS_CONFIG_PROTOCOL_INCLUDE_DIR to core's "
+                            "shared/libraries/config_protocol/include at the staged core commit "
+                            "(.github/scripts/fetch_sources.py --opendaq <sha> puts core in build/_src/openDAQ)")
+    endif()
+    add_library(daq::config_protocol INTERFACE IMPORTED GLOBAL)
+    set_target_properties(daq::config_protocol PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${OPENDAQ_INTEGRATION_TESTS_CONFIG_PROTOCOL_INCLUDE_DIR}"
+        INTERFACE_LINK_LIBRARIES daq::opendaq)
+    message(STATUS "daq::config_protocol: headers only, from ${OPENDAQ_INTEGRATION_TESTS_CONFIG_PROTOCOL_INCLUDE_DIR}")
+else()
+    message(STATUS "daq::config_protocol: from the ${OPENDAQ_SDK_NAME} package")
+endif()
+
 # CMake helpers of core's that it does not install (copies, see the files)
 include(${CMAKE_CURRENT_LIST_DIR}/prebuilt/openDAQTestResources.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/prebuilt/openDAQLogging.cmake)

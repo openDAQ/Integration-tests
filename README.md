@@ -60,13 +60,14 @@ To build against a local checkout instead of fetching a repository, pass its pat
 ## Building against prebuilt core and modules
 With `-DOPENDAQ_INTEGRATION_TESTS_FROM=PREBUILT` nothing of core and the modules is fetched or built: the configure step finds an installed core with `find_package(openDAQ)` and only the three test apps are built. Release only. For example, with unpacked core, OPC UA and LT streaming stagings on Windows:
 ```
-cmake --preset msvc22-prebuilt -DCMAKE_PREFIX_PATH=<core staging> -DOPENDAQ_INTEGRATION_TESTS_MODULE_DIRS="<OPC UA staging>/bin/modules;<LT staging>/bin/modules" -DOPENDAQ_INTEGRATION_TESTS_RUNTIME_DIRS="C:/Program Files/OpenSSL-Win64/bin" -DLT_MODULES_REF=<commit of the LT staging>
+cmake --preset msvc22-prebuilt -DCMAKE_PREFIX_PATH=<core staging> -DOPENDAQ_INTEGRATION_TESTS_MODULE_DIRS="<OPC UA staging>/bin/modules;<LT staging>/bin/modules" -DOPENDAQ_INTEGRATION_TESTS_RUNTIME_DIRS="C:/Program Files/OpenSSL-Win64/bin" -DLT_MODULES_REF=<commit of the LT staging> -DOPENDAQ_INTEGRATION_TESTS_CONFIG_PROTOCOL_INCLUDE_DIR=<core checkout at the staged commit>/shared/libraries/config_protocol/include
 cmake --build --preset msvc22-prebuilt
 ctest --preset msvc22-prebuilt
 ```
 * The core has to come with its test utilities and mocks (built with `OPENDAQ_ENABLE_TEST_UTILS`); `cmake --install` of a build of this project's default mode also works as the core prefix.
 * The configure step checks that every module the tests use is found exactly once, in the core's modules folder or in `OPENDAQ_INTEGRATION_TESTS_MODULE_DIRS`. The build copies them to the `modules` folder next to the test apps, and the tests load them from there.
 * The LT streaming TLS fixtures come from the LTStreamingModulesModern sources at `LT_MODULES_REF`.
+* Cores do not install config_protocol yet: its headers come from core's sources at the staged commit (`python .github/scripts/fetch_sources.py --opendaq <commit>` puts core in `build/_src/openDAQ`).
 * The workflow `integration-tests-prebuilt.yml` does the same in GitHub Actions. Started by hand, it pulls the stagings from ghcr. Called by another workflow (`workflow_call`), it takes them from ghcr or from the artifacts of the caller's run (input `staging-source`); its header lists what a caller has to provide.
 * See [CMake-Options.md](CMake-Options.md#prebuilt-core-and-modules) for all the options.
 

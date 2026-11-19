@@ -232,15 +232,17 @@ jobs:
       include-jobs: ${{ needs.inputs.outputs.include-jobs }}
       # integration-tests-test-results-<job>, which matches neither integration-tests-dep-* nor <component>-staging-*
       upload-pattern: 'integration-tests-*'
-      # The run command fetches LTStreamingModulesModern for its TLS fixtures, at the LT commit: run-stagings' output
-      # with run (given or taken from the stagings), the input with ghcr (run-stagings skipped, its output empty).
+      # The run command fetches LTStreamingModulesModern for its TLS fixtures, at the LT commit, and core for the
+      # config_protocol headers, at the core commit (cores do not install config_protocol yet, see FromPrebuilt.cmake):
+      # run-stagings' outputs with run (given or taken from the stagings), the inputs with ghcr (run-stagings skipped,
+      # its outputs empty).
       # The apt packages are core's runtime dependencies (OpenSSL 3 for the LT plugins, X11/GL/udev/freetype for the
       # reference function block module's renderer), as core's CI installs them
       packages: >
         [
           {
             "artifacts": ${{ needs.inputs.outputs.consume-artifacts }},
-            "run": "python3 .github/scripts/fetch_sources.py --lt-modules ${{ needs.run-stagings.outputs.lt-streaming-modules-revision || inputs.lt-streaming-modules-revision }}"
+            "run": "python3 .github/scripts/fetch_sources.py --lt-modules ${{ needs.run-stagings.outputs.lt-streaming-modules-revision || inputs.lt-streaming-modules-revision }} --opendaq ${{ needs.run-stagings.outputs.opendaq-revision || inputs.opendaq-revision }}"
           },
           {
             "match-jobs": ["ubuntu-*"],
@@ -258,7 +260,8 @@ jobs:
               "CMAKE_PREFIX_PATH": "${sourceDir}/prebuilt/opt/opendaq",
               "OPENDAQ_INTEGRATION_TESTS_MODULE_DIRS": "${sourceDir}/prebuilt/lib/modules",
               "FETCHCONTENT_SOURCE_DIR_LTSTREAMINGMODULESMODERN": "${sourceDir}/build/_src/LTStreamingModulesModern",
-              "LT_MODULES_REF": "${{ needs.run-stagings.outputs.lt-streaming-modules-revision || inputs.lt-streaming-modules-revision }}"
+              "LT_MODULES_REF": "${{ needs.run-stagings.outputs.lt-streaming-modules-revision || inputs.lt-streaming-modules-revision }}",
+              "OPENDAQ_INTEGRATION_TESTS_CONFIG_PROTOCOL_INCLUDE_DIR": "${sourceDir}/build/_src/openDAQ/shared/libraries/config_protocol/include"
             }
           }
         ]
