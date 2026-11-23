@@ -49,8 +49,8 @@ if (INTEGRATION_TESTS_MISSING_TARGETS)
     list(JOIN INTEGRATION_TESTS_MISSING_TARGETS ", " INTEGRATION_TESTS_MISSING_TARGETS)
     message(FATAL_ERROR "The ${OPENDAQ_SDK_NAME} package in ${${OPENDAQ_SDK_NAME}_DIR} lacks "
                         "${INTEGRATION_TESTS_MISSING_TARGETS}. The core has to be built with OPENDAQ_ENABLE_TEST_UTILS "
-                        "and packed with its \"External\" install component (a core staging from the bundle/stagings "
-                        "branch has both)")
+                        "and packed with its \"External\" install component (core's stagings have both since core #1377, "
+                        "whose \"stage\" preset turns the test utilities on)")
 endif()
 
 # config_protocol: the tests use only GetLatestConfigProtocolVersion(), an inline constexpr of its header. Cores that do

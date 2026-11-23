@@ -64,7 +64,7 @@ cmake --preset msvc22-prebuilt -DCMAKE_PREFIX_PATH=<core staging> -DOPENDAQ_INTE
 cmake --build --preset msvc22-prebuilt
 ctest --preset msvc22-prebuilt
 ```
-* The core has to come with its test utilities and mocks (built with `OPENDAQ_ENABLE_TEST_UTILS`); `cmake --install` of a build of this project's default mode also works as the core prefix.
+* The core has to come with its test utilities and mocks (built with `OPENDAQ_ENABLE_TEST_UTILS`). Core's stagings have them since core's `stage` preset turned them on (openDAQ#1377); `cmake --install` of a build of this project's default mode also works as the core prefix.
 * The configure step checks that every module the tests use is found exactly once, in the core's modules folder or in `OPENDAQ_INTEGRATION_TESTS_MODULE_DIRS`. The build copies them to the `modules` folder next to the test apps, and the tests load them from there.
 * The LT streaming TLS fixtures come from the LTStreamingModulesModern sources at `LT_MODULES_REF`.
 * Cores do not install config_protocol yet: its headers come from core's sources at the staged commit (`python .github/scripts/fetch_sources.py --opendaq <commit>` puts core in `build/_src/openDAQ`).
